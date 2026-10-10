@@ -1,0 +1,54 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resumes   Resume[]
+}
+
+model Resume {
+  id          String           @id @default(cuid())
+  userId      String?
+  user        User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String           @default("Untitled Resume")
+  targetRole  String?
+  template    String           @default("classic")
+  data        String           // JSON string of ResumeData
+  pdfPath     String?          // Path or URL to compiled PDF
+  texSource   String?          // Generated LaTeX code
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  revisions   ResumeRevision[]
+  messages    ChatMessage[]
+}
+
+model ResumeRevision {
+  id        String   @id @default(cuid())
+  resumeId  String
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  version   Int
+  prompt    String?
+  data      String   // JSON string of ResumeData snapshot
+  texSource String?
+  pdfPath   String?
+  createdAt DateTime @default(now())
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  resumeId  String
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant" | "system"
+  content   String
+  timestamp DateTime @default(now())
+}

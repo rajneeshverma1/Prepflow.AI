@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --bg-pure-white: #FFFFFF;
+  --bg-fog: #F7F7F9;
+  --border-dove: #E2E4E9;
+  --border-dove-light: rgba(226, 228, 233, 0.6);
+  --text-ink: #17191C;
+  --text-graphite: #595E68;
+  --text-ash: #8A8F9B;
+  --accent-rust: #843924;
+  --accent-purple: #7C5CFF;
+  --accent-purple-end: #5B6CFF;
+}
+
+body {
+  background-color: var(--bg-pure-white);
+  color: var(--text-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: -0.015em;
+  overflow-x: hidden;
+}
+
+/* Sintropix Signature Spotlight (Pure Light Theme with subtle top radial glow) */
+.sintropix-spotlight {
+  background: radial-gradient(60% 55% at 50% 18%, rgba(213, 210, 252, 0.65) 0%, rgba(251, 225, 209, 0.3) 45%, rgba(255, 255, 255, 0) 75%);
+}
+
+/* Purple Glow Badge */
+.glow-purple {
+  background: linear-gradient(135deg, #7C5CFF 0%, #5B6CFF 100%);
+  box-shadow: 0 0 16px rgba(124, 92, 255, 0.45);
+}
+
+/* Sintropix Soft Floating Card Shadow */
+.shadow-float {
+  box-shadow: 0 20px 50px -12px rgba(23, 25, 28, 0.08), 0 8px 24px -8px rgba(23, 25, 28, 0.04);
+}
+
+.shadow-card {
+  box-shadow: 0 12px 30px -10px rgba(23, 25, 28, 0.06);
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D5D8E0;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B0B5C0;
+}
