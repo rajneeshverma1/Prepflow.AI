@@ -4,14 +4,13 @@ import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { NewResumeModal } from '@/components/dashboard/NewResumeModal';
-import { Sparkles, ArrowRight, Upload, FileText, Paperclip, RefreshCw } from 'lucide-react';
+import { ArrowRight, Upload, RefreshCw } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [promptText, setPromptText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | undefined>(undefined);
 
@@ -119,55 +118,9 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Sintropix AI Command & Upload Bar */}
-            <div className="pt-6 max-w-xl mx-auto">
-              <div className="flex items-center gap-3 rounded-2xl border border-[#E2E4E9] bg-white p-3.5 shadow-float">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full glow-purple text-white">
-                  <Sparkles className="w-4 h-4" />
-                </span>
-                <input
-                  type="text"
-                  placeholder="Upload resume or paste text to open in AI editor..."
-                  value={promptText}
-                  onChange={(e) => setPromptText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') setIsModalOpen(true);
-                  }}
-                  className="flex-1 text-sm bg-transparent border-none text-[#17191C] focus:outline-hidden placeholder:text-[#8A8F9B]"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-[#8A8F9B] hover:text-[#7C5CFF]"
-                  title="Upload resume file"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Action Pills */}
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                {[
-                  'Upload PDF Resume',
-                  'Upload Image/DOCX Resume',
-                  'Add my latest internship',
-                  'Tailor for Senior Role',
-                ].map((pill, i) => (
-                  <button
-                    key={i}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-full border border-[#E2E4E9] bg-white px-3.5 py-1.5 text-[13px] text-[#595E68] hover:text-[#17191C] hover:border-[#7C5CFF] transition-all shadow-2xs flex items-center gap-1.5"
-                  >
-                    <Upload className="w-3 h-3 text-[#7C5CFF]" />
-                    <span>{pill}</span>
-                  </button>
-                ))}
-              </div>
-
-              {uploadError && (
-                <p className="mt-2 text-xs text-red-600 font-medium text-center">{uploadError}</p>
-              )}
-            </div>
+            {uploadError && (
+              <p className="pt-2 text-xs text-red-600 font-medium text-center">{uploadError}</p>
+            )}
           </div>
 
         </div>
