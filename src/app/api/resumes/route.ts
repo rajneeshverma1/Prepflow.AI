@@ -23,6 +23,7 @@ export async function POST(req: Request) {
       targetRole: body.targetRole,
       template: body.template || 'classic',
       initialData: body.initialData,
+      texSource: body.texSource,
     });
 
     return NextResponse.json({ success: true, resume: newResume }, { status: 201 });

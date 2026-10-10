@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, Code2, History, Check, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, Code2, History, Check, RefreshCw, PanelLeft } from 'lucide-react';
 import { TemplateId } from '@/lib/types/resume';
 
 interface WorkspaceHeaderProps {
@@ -15,6 +15,8 @@ interface WorkspaceHeaderProps {
   onDownloadPdf: () => void;
   isCompiling: boolean;
   onManualCompile: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function WorkspaceHeader({
@@ -27,6 +29,8 @@ export function WorkspaceHeader({
   onDownloadPdf,
   isCompiling,
   onManualCompile,
+  isSidebarOpen,
+  onToggleSidebar,
 }: WorkspaceHeaderProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(title);
@@ -41,8 +45,8 @@ export function WorkspaceHeader({
 
   return (
     <header className="sticky top-0 z-30 h-14 border-b border-[#E2E4E9] bg-white/90 backdrop-blur-md px-4 flex items-center justify-between">
-      {/* Left: Back & Title */}
-      <div className="flex items-center gap-3">
+      {/* Left: Back, Sidebar Toggle & Title */}
+      <div className="flex items-center gap-2.5">
         <Link
           href="/"
           className="p-1.5 rounded-lg border border-[#E2E4E9] bg-white text-[#17191C] hover:bg-[#F7F7F9] transition-colors"
@@ -50,6 +54,21 @@ export function WorkspaceHeader({
         >
           <ArrowLeft className="w-4 h-4" />
         </Link>
+
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+              isSidebarOpen
+                ? 'border-[#7C5CFF] bg-[#7C5CFF]/10 text-[#7C5CFF]'
+                : 'border-[#E2E4E9] bg-white text-[#595E68] hover:text-[#17191C] hover:bg-[#F7F7F9]'
+            }`}
+            title={isSidebarOpen ? 'Close Resume Form Sidebar' : 'Open Resume Form Sidebar'}
+          >
+            <PanelLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">{isSidebarOpen ? 'Hide Form' : 'Edit Form'}</span>
+          </button>
+        )}
 
         {isEditingTitle ? (
           <form onSubmit={handleTitleSubmit} className="flex items-center gap-1.5">

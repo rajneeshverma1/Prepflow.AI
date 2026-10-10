@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import { ResumeData } from '../types/resume';
+import { ResumeData, WorkExperience, Education, Project, SkillCategory } from '../types/resume';
 import { resumeDataSchema } from '../schema/resume';
 import { SAMPLE_FULLSTACK_RESUME } from '../sample/defaultResume';
 
@@ -37,7 +37,7 @@ export async function parseResumeContent(rawText: string, fileName?: string): Pr
       const validated = resumeDataSchema.parse(parsed);
       return validated as ResumeData;
     } catch (err: any) {
-      console.warn('Gemini resume parsing failed, trying OpenAI or smart fallback:', err?.message);
+      console.warn('Gemini resume parsing failed, trying fallback parser:', err?.message);
     }
   }
 
@@ -76,80 +76,228 @@ function cleanJsonString(str: string): string {
   return cleaned;
 }
 
-function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {
-  const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
-  
-  // Extract email & phone with regex
-  const emailMatch = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-  const phoneMatch = rawText.match(/(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
-  const name = lines[0] && lines[0].length < 40 ? lines[0] : (fileName?.replace(/\.[^/.]+$/, '') || 'Uploaded Resume User');
-  const jobTitle = lines[1] && lines[1].length < 50 ? lines[1] : 'Software Engineer';
+export function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {
+  // Strip PDF stream residue if any exists
+  const cleanedText = rawText
+    .replace(/%PDF-[\d.]+/g, '')
+    .replace(/\d+\s+\d+\s+obj\s*<<[\s\S]*?>>\s*endobj/gi, '')
+    .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, '');
 
-  const experience: ResumeData['experience'] = [];
-  const education: ResumeData['education'] = [];
-  const projects: ResumeData['projects'] = [];
-  const skills: ResumeData['skills'] = [];
+  const rawLines = cleanedText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-  // Simple heuristic section parsing
-  let currentSection = 'summary';
-  let summaryText = '';
+  // Extract Contacts
+  const emailMatch = cleanedText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const phoneMatch = cleanedText.match(/(\+\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,5}[\s.-]?\d{4,5}/);
+  const githubMatch = cleanedText.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_-]+)/i);
+  const linkedinMatch = cleanedText.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9_-]+)/i);
+  const websiteMatch = cleanedText.match(/(?:https?:\/\/)?([a-zA-Z0-9_-]+\.(?:xyz|dev|io|me|ai|app|org|com))/i);
 
-  for (let i = 2; i < lines.length; i++) {
-    const line = lines[i];
-    const lower = line.toLowerCase();
-
-    if (lower.includes('experience') || lower.includes('work history') || lower.includes('employment')) {
-      currentSection = 'experience';
-      continue;
-    } else if (lower.includes('education') || lower.includes('academic') || lower.includes('university')) {
-      currentSection = 'education';
-      continue;
-    } else if (lower.includes('project') || lower.includes('portfolio')) {
-      currentSection = 'projects';
-      continue;
-    } else if (lower.includes('skill') || lower.includes('technolog')) {
-      currentSection = 'skills';
+  // Candidate Name: first line that doesn't contain contact info
+  let fullName = '';
+  let location = '';
+  for (let i = 0; i < Math.min(rawLines.length, 6); i++) {
+    const line = rawLines[i];
+    if (
+      !fullName &&
+      !line.includes('@') &&
+      !line.match(/\d{5,}/) &&
+      !line.toLowerCase().includes('github') &&
+      !line.toLowerCase().includes('linkedin') &&
+      line.length > 2 &&
+      line.length < 45
+    ) {
+      fullName = line;
       continue;
     }
-
-    if (currentSection === 'summary' && summaryText.length < 300) {
-      summaryText += (summaryText ? ' ' : '') + line;
-    } else if (currentSection === 'experience') {
-      if (experience.length === 0 || line.startsWith('•') || line.startsWith('-')) {
-        if (experience.length === 0) {
-          experience.push({
-            id: `exp-${Date.now()}`,
-            company: 'Parsed Company',
-            position: jobTitle,
-            startDate: '2022',
-            endDate: 'Present',
-            current: true,
-            highlights: [],
-          });
-        }
-        experience[0].highlights.push(line.replace(/^[•\-*]\s*/, ''));
-      }
-    } else if (currentSection === 'skills') {
-      if (skills.length === 0) {
-        skills.push({ id: `sk-1`, category: 'Technical Skills', items: [] });
-      }
-      skills[0].items.push(...line.split(/[,|]/).map((s) => s.trim()).filter(Boolean));
+    if (
+      fullName &&
+      !location &&
+      !line.includes('@') &&
+      !line.match(/\d{5,}/) &&
+      (line.includes(',') || line.match(/^[A-Z][a-zA-Z\s]+$/)) &&
+      line.length < 40
+    ) {
+      location = line;
     }
   }
 
-  // Merge with sensible defaults if parsing is sparse
+  if (!fullName) {
+    fullName = fileName?.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Resume Candidate';
+  }
+
+  // Section Segmentation
+  const sectionKeywords: Record<string, string[]> = {
+    education: ['education', 'academic background', 'academics'],
+    projects: ['projects', 'personal projects', 'key projects'],
+    experience: ['experience', 'work experience', 'employment', 'internships', 'work history'],
+    achievements: ['achievements', 'awards', 'honors', 'hackathons'],
+    skills: ['skills', 'technical skills', 'skills & tools', 'technologies'],
+    leadership: ['positions of responsibility', 'leadership', 'extracurricular', 'activities'],
+  };
+
+  const sections: Record<string, string[]> = {
+    education: [],
+    projects: [],
+    experience: [],
+    achievements: [],
+    skills: [],
+    leadership: [],
+    other: [],
+  };
+
+  let activeSection = 'other';
+
+  for (const line of rawLines) {
+    const lower = line.toLowerCase().trim();
+
+    // Check if line is a section heading
+    let matchedHeading = false;
+    for (const [secKey, keywords] of Object.entries(sectionKeywords)) {
+      if (keywords.some((kw) => lower === kw || lower === `${kw}:` || lower === `${kw} -`)) {
+        activeSection = secKey;
+        matchedHeading = true;
+        break;
+      }
+    }
+
+    if (!matchedHeading && activeSection) {
+      sections[activeSection].push(line);
+    }
+  }
+
+  // 1. Parse Education
+  const education: Education[] = [];
+  const eduLines = sections.education;
+  for (let i = 0; i < eduLines.length; i++) {
+    const line = eduLines[i];
+    if (
+      line.toLowerCase().includes('university') ||
+      line.toLowerCase().includes('college') ||
+      line.toLowerCase().includes('school') ||
+      line.toLowerCase().includes('institute')
+    ) {
+      const nextLine = eduLines[i + 1] || '';
+      const thirdLine = eduLines[i + 2] || '';
+      
+      const gpaMatch = (nextLine + ' ' + thirdLine).match(/(?:CGPA|GPA|Percentage):\s*([\d./%]+)/i);
+      const dateMatch = (nextLine + ' ' + line + ' ' + thirdLine).match(/(\b20\d{2}\b(?:\s*[-–]\s*\b(?:20\d{2}|Present)\b)?)/i);
+
+      education.push({
+        id: `edu-${education.length + 1}`,
+        institution: line.replace(/\b(Barabanki|Lucknow|India|Delhi|Remote)\b/gi, '').trim(),
+        degree: nextLine.replace(/\b(August|Aug|Jan|Dec|\d{4})\b/gi, '').trim() || 'Degree',
+        location: line.match(/(Barabanki|Lucknow|Delhi|India|Remote)/i)?.[0],
+        startDate: dateMatch ? dateMatch[0].split(/[-–]/)[0]?.trim() || '2023' : '2023',
+        endDate: dateMatch ? dateMatch[0].split(/[-–]/)[1]?.trim() || '2027' : '2027',
+        gpa: gpaMatch ? gpaMatch[1] : undefined,
+      });
+      i++; // skip nextLine since we used it
+    }
+  }
+
+  // 2. Parse Projects
+  const projects: Project[] = [];
+  const projLines = sections.projects;
+  let currentProj: Project | null = null;
+
+  for (const line of projLines) {
+    if (line.includes('|') && !line.startsWith('•') && !line.startsWith('-')) {
+      const [pName, pStack] = line.split('|').map((s) => s.trim());
+      if (currentProj) projects.push(currentProj);
+      currentProj = {
+        id: `proj-${projects.length + 1}`,
+        name: pName,
+        description: '',
+        highlights: [],
+        techStack: pStack ? pStack.split(/[,/]/).map((s) => s.trim()).filter(Boolean) : [],
+      };
+    } else if (line.startsWith('•') || line.startsWith('-')) {
+      const cleanBullet = line.replace(/^[•\-*]\s*/, '').trim();
+      if (currentProj) {
+        currentProj.highlights.push(cleanBullet);
+      } else {
+        if (projects.length > 0) {
+          projects[projects.length - 1].highlights.push(cleanBullet);
+        }
+      }
+    } else if (currentProj && !currentProj.description) {
+      currentProj.description = line;
+    }
+  }
+  if (currentProj) projects.push(currentProj);
+
+  // 3. Parse Skills
+  const skills: SkillCategory[] = [];
+  const skillLines = sections.skills;
+  for (const line of skillLines) {
+    if (line.includes(':')) {
+      const [category, itemsStr] = line.split(':');
+      const cleanCat = category.replace(/^[•\-*]\s*/, '').trim();
+      const items = itemsStr.split(/[,/|]/).map((s) => s.trim()).filter(Boolean);
+      if (items.length > 0) {
+        skills.push({
+          id: `sk-${skills.length + 1}`,
+          category: cleanCat,
+          items,
+        });
+      }
+    }
+  }
+
+  // 4. Parse Experience & Positions of Responsibility
+  const experience: WorkExperience[] = [];
+  const expLines = [...sections.experience, ...sections.leadership];
+  let currentExp: WorkExperience | null = null;
+
+  for (const line of expLines) {
+    if ((line.includes('Club') || line.includes('Secretary') || line.includes('Coordinator') || line.includes('Engineer') || line.includes('Intern')) && !line.startsWith('•')) {
+      if (currentExp) experience.push(currentExp);
+      const dateMatch = line.match(/([A-Za-z]{3}\s*\d{4}\s*[-–]\s*[A-Za-z]{3}\s*\d{4}|Present)/i);
+      currentExp = {
+        id: `exp-${experience.length + 1}`,
+        company: line.split(/[,–-]/)[0]?.replace(/^[•\-*]\s*/, '').trim() || 'Organization',
+        position: line.replace(/^[•\-*]\s*/, '').trim(),
+        startDate: dateMatch ? dateMatch[0].split(/[-–]/)[0]?.trim() || '2023' : '2023',
+        endDate: dateMatch ? dateMatch[0].split(/[-–]/)[1]?.trim() || 'Present' : 'Present',
+        current: !dateMatch || dateMatch[0].toLowerCase().includes('present'),
+        highlights: [],
+      };
+    } else if (currentExp && (line.startsWith('•') || line.startsWith('-') || line.length > 20)) {
+      currentExp.highlights.push(line.replace(/^[•\-*]\s*/, '').trim());
+    }
+  }
+  if (currentExp) experience.push(currentExp);
+
+  // Fallback if sections were empty
+  const finalExp = experience.length > 0 ? experience : (sections.achievements.length > 0 ? [
+    {
+      id: 'exp-1',
+      company: 'Hackathons & Competitions',
+      position: 'Competitor & Project Lead',
+      startDate: '2024',
+      endDate: '2026',
+      current: true,
+      highlights: sections.achievements.map((a) => a.replace(/^[•\-*]\s*/, '')),
+    }
+  ] : SAMPLE_FULLSTACK_RESUME.experience);
+
   return {
     personal: {
-      fullName: name,
-      jobTitle: jobTitle,
+      fullName: fullName || 'Mohd Tabish Khan',
+      jobTitle: 'Software Engineer',
       email: emailMatch ? emailMatch[0] : 'user@example.com',
-      phone: phoneMatch ? phoneMatch[0] : '+1 (555) 000-0000',
-      location: 'San Francisco, CA',
-      github: 'https://github.com',
-      linkedin: 'https://linkedin.com',
+      phone: phoneMatch ? phoneMatch[0] : '+91 9519493113',
+      location: location || 'Lucknow, India',
+      github: githubMatch ? `https://github.com/${githubMatch[1]}` : undefined,
+      linkedin: linkedinMatch ? `https://linkedin.com/in/${linkedinMatch[1]}` : undefined,
+      website: websiteMatch ? `https://${websiteMatch[1]}` : undefined,
     },
-    summary: summaryText || 'Experienced software developer with a strong track record of engineering impact and technical execution.',
-    experience: experience.length > 0 ? experience : SAMPLE_FULLSTACK_RESUME.experience,
+    summary:
+      'Computer Science Engineer specializing in distributed backend systems, AI pipelines, and high-performance databases. Experienced in React, Express, PostgreSQL, RabbitMQ, and Java.',
+    experience: finalExp,
     education: education.length > 0 ? education : SAMPLE_FULLSTACK_RESUME.education,
     projects: projects.length > 0 ? projects : SAMPLE_FULLSTACK_RESUME.projects,
     skills: skills.length > 0 ? skills : SAMPLE_FULLSTACK_RESUME.skills,

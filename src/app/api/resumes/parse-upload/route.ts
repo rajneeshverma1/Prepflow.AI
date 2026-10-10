@@ -4,20 +4,42 @@ import { createResume, updateResumeData } from '@/lib/db/resumeStore';
 import { generateLatexSource } from '@/lib/latex/renderer';
 import { compileLatexToPdf } from '@/lib/latex/compiler';
 
+/**
+ * Extract text from a PDF Buffer using pdfjs-dist (pure JS, no native deps).
+ * pdfjs-dist v5 is ESM-only so we use dynamic import().
+ */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  try {
+    // Dynamic ESM import of pdfjs-dist legacy build (works in Node server routes)
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
+    const pdfjsLib = pdfjs.default ?? pdfjs;
+
+    // Disable worker for Node.js server-side usage
+    pdfjsLib.GlobalWorkerOptions = pdfjsLib.GlobalWorkerOptions ?? {};
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
+    const uint8 = new Uint8Array(buffer);
+    const loadingTask = pdfjsLib.getDocument({ data: uint8, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
+    const pdf = await loadingTask.promise;
+
+    const textParts: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .map((item: any) => ('str' in item ? item.str : ''))
+        .join(' ');
+      textParts.push(pageText);
+    }
+    return textParts.join('\n').trim();
+  } catch (err) {
+    console.warn('pdfjs-dist extraction failed, using binary fallback:', err);
+    return '';
+  }
+}
+
 export async function POST(req: Request) {
   try {
-    // Polyfill DOMMatrix for PDF.js / pdf-parse in Node runtime
-    if (typeof globalThis.DOMMatrix === 'undefined') {
-      (globalThis as any).DOMMatrix = class DOMMatrix { constructor() {} };
-    }
-
-    let pdfParse: any = null;
-    try {
-      pdfParse = require('pdf-parse');
-    } catch (reqErr) {
-      console.warn('Failed to require pdf-parse:', reqErr);
-    }
-
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const textPrompt = formData.get('text') as string | null;
@@ -31,38 +53,31 @@ export async function POST(req: Request) {
       const buffer = Buffer.from(arrayBuffer);
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        try {
-          if (pdfParse) {
-            const parseFunc = typeof pdfParse === 'function' ? pdfParse : (pdfParse.default || pdfParse);
-            if (typeof parseFunc === 'function') {
-              const parsedPdf = await parseFunc(buffer);
-              extractedText = parsedPdf.text || '';
-            } else if (pdfParse.PDFParse) {
-              const parser = new pdfParse.PDFParse(buffer);
-              extractedText = (await parser.getText()) || '';
-            }
-          }
-        } catch (pdfErr) {
-          console.warn('pdf-parse execution error, applying fallback string extraction:', pdfErr);
+        // Try pdfjs-dist first (pure JS, no native deps)
+        extractedText = await extractPdfText(buffer);
+
+        // Clean page markers like "-- 1 of 2 --"
+        if (extractedText) {
+          extractedText = extractedText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, ' ').trim();
         }
 
-        // Fallback string extraction if pdf-parse text is empty
+        // Fallback: raw binary string extraction if pdfjs found nothing
         if (!extractedText || extractedText.trim().length < 10) {
           const rawStr = buffer.toString('binary');
           const strings = rawStr.match(/[\x20-\x7E\s]{4,}/g) || [];
           extractedText = strings.join(' ');
         }
       } else if (file.type.startsWith('image/')) {
-        // Image upload: fallback text extracted from filename or description
         extractedText = `Uploaded Resume Image: ${fileName}\nExtract and structure professional resume details for ${fileName.replace(/\.[^/.]+$/, '')}`;
       } else {
+        // Plain text / docx fallback
         extractedText = buffer.toString('utf8');
       }
     } else if (textPrompt) {
       extractedText = textPrompt;
     }
 
-    // Clean control characters from extracted text
+    // Sanitize control characters
     extractedText = extractedText.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, ' ').trim();
 
     if (!extractedText || extractedText.length < 5) {
@@ -78,7 +93,7 @@ export async function POST(req: Request) {
       parsedData = await parseResumeContent(`Resume of ${fileName}`, fileName);
     }
 
-    // 2. Generate LaTeX Source & Compile PDF
+    // 2. Generate LaTeX Source & Compile PDF (tectonic optional)
     const texSource = generateLatexSource(parsedData);
     const title = parsedData.personal.fullName && parsedData.personal.fullName !== 'Applicant Name'
       ? `${parsedData.personal.fullName} – Resume`
@@ -95,6 +110,9 @@ export async function POST(req: Request) {
 
     if (compileRes.success && compileRes.pdfRelativePath) {
       await updateResumeData(created.id, parsedData, `Uploaded ${fileName}`, compileRes.pdfRelativePath);
+    } else {
+      // Even if tectonic is missing, still store texSource for LaTeX view
+      await updateResumeData(created.id, parsedData, `Uploaded ${fileName}`, undefined);
     }
 
     return NextResponse.json({

@@ -1,6 +1,7 @@
 import { prisma } from './client';
 import { ResumeData, RevisionMeta, ChatMessage } from '../types/resume';
 import { SAMPLE_FULLSTACK_RESUME, SAMPLE_AI_RESUME } from '../sample/defaultResume';
+import { BLANK_RESUME_DATA, BLANK_MINIMAL_LATEX_TEMPLATE } from '../sample/blankResume';
 import { generateLatexSource } from '../latex/renderer';
 
 // In-memory fallback cache for instant local dev responsiveness when database is connecting/configuring
@@ -173,10 +174,12 @@ export async function createResume(params: {
   targetRole?: string;
   template?: string;
   initialData?: ResumeData;
+  texSource?: string;
 }) {
   const id = `resume-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  const data = params.initialData || { ...SAMPLE_FULLSTACK_RESUME, template: (params.template as any) || 'classic' };
-  const texSource = generateLatexSource(data);
+  const isBlank = params.template === 'blank' || params.title?.toLowerCase().includes('blank');
+  const data = params.initialData || (isBlank ? BLANK_RESUME_DATA : { ...SAMPLE_FULLSTACK_RESUME, template: (params.template as any) || 'classic' });
+  const texSource = params.texSource || (isBlank ? BLANK_MINIMAL_LATEX_TEMPLATE : generateLatexSource(data));
   const now = new Date().toISOString();
 
   const newResume = {

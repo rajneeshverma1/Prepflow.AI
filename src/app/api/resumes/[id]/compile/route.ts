@@ -14,7 +14,15 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 });
     }
 
-    const texSource = generateLatexSource(resume.data);
+    // Allow caller to supply a custom texSource (e.g. manually edited LaTeX)
+    let texSource: string;
+    try {
+      const body = await request.json().catch(() => ({}));
+      texSource = (body?.texSource as string) || generateLatexSource(resume.data);
+    } catch {
+      texSource = generateLatexSource(resume.data);
+    }
+
     const compileRes = await compileLatexToPdf(texSource, id);
 
     if (compileRes.success && compileRes.pdfRelativePath) {

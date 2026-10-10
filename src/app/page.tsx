@@ -41,6 +41,31 @@ export default function DashboardPage() {
     }
   };
 
+  const handleStartBlank = async () => {
+    setIsUploading(true);
+    setUploadError(undefined);
+    try {
+      const res = await fetch('/api/resumes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'My Resume',
+          template: 'blank',
+        }),
+      });
+      const json = await res.json();
+      if (json.success && json.resume) {
+        router.push(`/editor/${json.resume.id}`);
+      } else {
+        setUploadError(json.error || 'Failed to initialize blank resume.');
+      }
+    } catch (err: any) {
+      setUploadError(err.message || 'Error initializing blank resume.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFileUpload(e.target.files[0]);
@@ -68,7 +93,7 @@ export default function DashboardPage() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E2E4E9] shadow-2xs text-xs font-semibold text-[#595E68]">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              <span>Upload PDF / Image & Edit by Prompt</span>
+              <span>ATS-Compliant LaTeX Template & Prompt Editing</span>
             </div>
 
             {/* Headline with Rust Underline */}
@@ -87,34 +112,43 @@ export default function DashboardPage() {
             </h1>
 
             <p className="max-w-xl mx-auto text-base sm:text-lg text-[#595E68] font-normal leading-relaxed">
-              Upload your old resume (PDF, DOCX, or Image). Prepflow.ai parses it into LaTeX and compiles a PDF ready for instant prompt editing.
+              Start with a clean ATS-friendly LaTeX template or upload your existing resume to tailor and compile instantly.
             </p>
 
             {/* Hero CTA Buttons */}
-            <div className="pt-2 flex items-center justify-center gap-5">
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-4">
+              <button
+                onClick={handleStartBlank}
+                disabled={isUploading}
+                className="whitespace-nowrap rounded-full bg-[#17191C] px-6 py-3 text-[15px] font-medium text-white shadow-[0_12px_32px_-12px_rgba(23,25,28,0.5)] transition-transform hover:-translate-y-px flex items-center gap-2 disabled:opacity-50"
+              >
+                <FileText className="w-4 h-4 text-[#7C5CFF]" />
+                <span>Start with Blank Template</span>
+              </button>
+
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="whitespace-nowrap rounded-full bg-[#17191C] px-6 py-3 text-[15px] font-medium text-white shadow-[0_12px_32px_-12px_rgba(23,25,28,0.5)] transition-transform hover:-translate-y-px flex items-center gap-2 disabled:opacity-50"
+                className="whitespace-nowrap rounded-full border border-[#E2E4E9] bg-white px-6 py-3 text-[15px] font-medium text-[#17191C] transition-transform hover:-translate-y-px flex items-center gap-2 disabled:opacity-50 hover:border-[#7C5CFF]"
               >
                 {isUploading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin text-[#7C5CFF]" />
-                    <span>Parsing Resume...</span>
+                    <span>Processing...</span>
                   </>
                 ) : (
                   <>
-                    <Upload className="w-4 h-4" />
-                    <span>Upload Resume</span>
+                    <Upload className="w-4 h-4 text-[#595E68]" />
+                    <span>Upload Existing PDF</span>
                   </>
                 )}
               </button>
 
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="whitespace-nowrap text-[15px] font-medium text-[#17191C] transition-opacity hover:opacity-60 flex items-center gap-1"
+                className="whitespace-nowrap text-[15px] font-medium text-[#595E68] transition-opacity hover:opacity-100 flex items-center gap-1"
               >
-                <span>Browse Options</span>
+                <span>More Options</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -147,15 +181,21 @@ export default function DashboardPage() {
 
               {/* Action Pills */}
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  onClick={handleStartBlank}
+                  className="rounded-full border border-[#7C5CFF]/30 bg-[#7C5CFF]/5 px-3.5 py-1.5 text-[13px] text-[#7C5CFF] font-medium hover:bg-[#7C5CFF]/10 transition-all shadow-2xs flex items-center gap-1.5"
+                >
+                  <FileText className="w-3 h-3 text-[#7C5CFF]" />
+                  <span>Start from Blank LaTeX Template</span>
+                </button>
                 {[
                   'Upload PDF Resume',
-                  'Upload Image/DOCX Resume',
-                  'Add my latest internship',
-                  'Tailor for Senior Role',
+                  'Upload DOCX/Image',
+                  'Paste LaTeX Code',
                 ].map((pill, i) => (
                   <button
                     key={i}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setIsModalOpen(true)}
                     className="rounded-full border border-[#E2E4E9] bg-white px-3.5 py-1.5 text-[13px] text-[#595E68] hover:text-[#17191C] hover:border-[#7C5CFF] transition-all shadow-2xs flex items-center gap-1.5"
                   >
                     <Upload className="w-3 h-3 text-[#7C5CFF]" />
