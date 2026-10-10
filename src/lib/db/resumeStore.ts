@@ -3,20 +3,25 @@ import { ResumeData, RevisionMeta, ChatMessage } from '../types/resume';
 import { SAMPLE_FULLSTACK_RESUME, SAMPLE_AI_RESUME } from '../sample/defaultResume';
 import { generateLatexSource } from '../latex/renderer';
 
-// In-memory fallback cache for instant local dev responsiveness when database is connecting/configuring
-const memoryResumes: Map<string, {
-  id: string;
-  title: string;
-  targetRole?: string;
-  template: string;
-  data: ResumeData;
-  pdfPath?: string;
-  texSource?: string;
-  createdAt: string;
-  updatedAt: string;
-  revisions: RevisionMeta[];
-  messages: ChatMessage[];
-}> = new Map();
+// Global in-memory cache for instant local dev responsiveness across Fast Refresh & reloads
+const globalForResumes = globalThis as unknown as {
+  memoryResumes: Map<string, {
+    id: string;
+    title: string;
+    targetRole?: string;
+    template: string;
+    data: ResumeData;
+    pdfPath?: string;
+    texSource?: string;
+    createdAt: string;
+    updatedAt: string;
+    revisions: RevisionMeta[];
+    messages: ChatMessage[];
+  }> | undefined;
+};
+
+export const memoryResumes = globalForResumes.memoryResumes ?? new Map();
+if (process.env.NODE_ENV !== 'production') globalForResumes.memoryResumes = memoryResumes;
 
 // Populate memory store with starter sample resumes if empty
 function initializeSampleMemoryStore() {

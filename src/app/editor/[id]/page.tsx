@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, use } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { LeftSidebar } from '@/components/workspace/LeftSidebar';
 import { CenterChat } from '@/components/workspace/CenterChat';
@@ -10,9 +10,10 @@ import { VersionHistoryModal } from '@/components/workspace/VersionHistoryModal'
 import { ResumeData, RevisionMeta, ChatMessage, TemplateId } from '@/lib/types/resume';
 import { MessageSquare, Eye } from 'lucide-react';
 
-export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function EditorPage() {
   const router = useRouter();
+  const routeParams = useParams();
+  const id = typeof routeParams?.id === 'string' ? routeParams.id : (Array.isArray(routeParams?.id) ? routeParams.id[0] : '');
 
   const [resumeData, setResumeData] = useState<ResumeData | null>(null);
   const [title, setTitle] = useState('Untitled Resume');
@@ -32,6 +33,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('chat');
 
   const fetchResumeDetails = async () => {
+    if (!id) return;
     try {
       const res = await fetch(`/api/resumes/${id}`);
       const json = await res.json();
@@ -57,7 +59,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   };
 
   useEffect(() => {
-    fetchResumeDetails();
+    if (id) {
+      fetchResumeDetails();
+    }
   }, [id]);
 
   // Handle manual structured form edit

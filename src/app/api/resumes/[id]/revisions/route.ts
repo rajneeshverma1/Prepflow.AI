@@ -33,7 +33,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 });
     }
 
-    const targetRevision = resume.revisions.find((r) => r.version === versionNumber);
+    const targetRevision = resume.revisions?.find((r: any) => r.version === versionNumber);
     if (!targetRevision) {
       return NextResponse.json({ success: false, error: `Revision version ${versionNumber} not found` }, { status: 404 });
     }
