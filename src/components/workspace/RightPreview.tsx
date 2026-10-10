@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Download, Copy, Code, FileText, Check, ExternalLink, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ZoomIn, ZoomOut, Download, Copy, Code, FileText, Check, ExternalLink, RefreshCw, Play, AlertCircle, Sparkles } from 'lucide-react';
 import { ResumeData } from '@/lib/types/resume';
 
 interface RightPreviewProps {
@@ -9,6 +9,9 @@ interface RightPreviewProps {
   texSource: string;
   data: ResumeData;
   isCompiling: boolean;
+  compilationError?: string;
+  onTexChange?: (newTex: string) => void;
+  onRecompile?: () => void;
   onDownloadPdf: () => void;
   onDownloadTex: () => void;
 }
@@ -18,15 +21,27 @@ export function RightPreview({
   texSource,
   data,
   isCompiling,
+  compilationError,
+  onTexChange,
+  onRecompile,
   onDownloadPdf,
   onDownloadTex,
 }: RightPreviewProps) {
   const [zoom, setZoom] = useState(100);
   const [viewMode, setViewMode] = useState<'split' | 'pdf' | 'latex'>('split');
   const [copied, setCopied] = useState(false);
+  const [autoCompile, setAutoCompile] = useState(false);
+  const [localTex, setLocalTex] = useState(texSource);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const autoCompileTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synchronize localTex with incoming texSource prop
+  useEffect(() => {
+    setLocalTex(texSource);
+  }, [texSource]);
 
   const handleCopyLatex = () => {
-    navigator.clipboard.writeText(texSource);
+    navigator.clipboard.writeText(localTex);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -34,6 +49,45 @@ export function RightPreview({
   const handleZoomIn = () => setZoom((z) => Math.min(z + 15, 175));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 15, 50));
   const handleResetZoom = () => setZoom(100);
+
+  // Handle direct text editing in LaTeX editor
+  const handleTexInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newVal = e.target.value;
+    setLocalTex(newVal);
+    if (onTexChange) {
+      onTexChange(newVal);
+    }
+
+    // If autoCompile is enabled, trigger compile after 1200ms debounce
+    if (autoCompile && onRecompile) {
+      if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
+      autoCompileTimerRef.current = setTimeout(() => {
+        onRecompile();
+      }, 1200);
+    }
+  };
+
+  // Keyboard shortcut handler (Tab indentation & Ctrl+S / Cmd+S recompile)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      if (onRecompile) onRecompile();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const newVal = localTex.substring(0, start) + '  ' + localTex.substring(end);
+      setLocalTex(newVal);
+      if (onTexChange) onTexChange(newVal);
+      // restore cursor
+      setTimeout(() => {
+        target.selectionStart = target.selectionEnd = start + 2;
+      }, 0);
+    }
+  };
+
+  const lines = localTex.split('\n');
 
   return (
     <section className="flex-1 h-[calc(100vh-3.5rem)] bg-[#F7F7F9] flex flex-col min-w-0 border-r border-[#E2E4E9]">
@@ -103,6 +157,22 @@ export function RightPreview({
           )}
 
           <div className="flex items-center gap-1.5">
+            {onRecompile && (
+              <button
+                onClick={onRecompile}
+                disabled={isCompiling}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#17191C] text-white font-medium text-xs shadow-xs hover:bg-[#2D3139] disabled:opacity-50 transition-all"
+                title="Recompile LaTeX to PDF (Cmd+S / Ctrl+S)"
+              >
+                {isCompiling ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#7C5CFF]" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 fill-white text-white" />
+                )}
+                <span>{isCompiling ? 'Compiling...' : 'Recompile'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleCopyLatex}
               className="flex items-center gap-1 px-3 py-1 rounded-full border border-[#E2E4E9] bg-white text-[#17191C] font-medium text-xs hover:border-[#7C5CFF]"
@@ -127,6 +197,24 @@ export function RightPreview({
         </div>
       </div>
 
+      {/* Compilation Error Notification */}
+      {compilationError && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center justify-between text-xs text-red-700">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="font-medium">{compilationError}</span>
+          </div>
+          {onRecompile && (
+            <button
+              onClick={onRecompile}
+              className="text-xs font-semibold underline text-red-800 hover:text-red-900"
+            >
+              Retry Compile
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Main Container */}
       <div className="flex-1 overflow-hidden p-3 flex gap-3 relative">
         {isCompiling && (
@@ -138,14 +226,62 @@ export function RightPreview({
           </div>
         )}
 
-        {/* LaTeX Code View (Visible in 'split' or 'latex' view) */}
+        {/* Editable LaTeX Code View (Visible in 'split' or 'latex' view) */}
         {(viewMode === 'split' || viewMode === 'latex') && (
-          <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} h-full bg-white text-[#17191C] rounded-2xl p-4 font-mono text-xs overflow-auto border border-[#E2E4E9] shadow-inner flex flex-col`}>
-            <div className="flex items-center justify-between border-b border-[#E2E4E9] pb-2 mb-2 text-[11px] text-[#8A8F9B]">
-              <span className="font-semibold text-[#17191C]">resume.tex (LaTeX Source)</span>
-              <span>{texSource.split('\n').length} lines</span>
+          <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} h-full bg-white text-[#17191C] rounded-2xl border border-[#E2E4E9] shadow-inner flex flex-col overflow-hidden`}>
+            {/* LaTeX Editor Header */}
+            <div className="flex items-center justify-between border-b border-[#E2E4E9] px-4 py-2 bg-[#FAFBFD] text-[11px] text-[#595E68] shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-[#17191C]">resume.tex</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-[#7C5CFF] border border-purple-200 font-medium">
+                  Editable LaTeX
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-[#595E68]">
+                  <input
+                    type="checkbox"
+                    checked={autoCompile}
+                    onChange={(e) => setAutoCompile(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-[#7C5CFF] focus:ring-[#7C5CFF] border-gray-300"
+                  />
+                  <span>Auto-compile</span>
+                </label>
+                <span className="font-mono text-[#8A8F9B]">{lines.length} lines</span>
+              </div>
             </div>
-            <pre className="flex-1 whitespace-pre-wrap leading-relaxed select-text font-mono">{texSource}</pre>
+
+            {/* LaTeX Textarea Code Editor */}
+            <div className="flex-1 flex overflow-hidden relative font-mono text-xs">
+              {/* Line Numbers Gutter */}
+              <div className="w-10 bg-[#F7F7F9] border-r border-[#E2E4E9] py-3 text-right pr-2 select-none text-[11px] text-[#A0A4AB] overflow-hidden">
+                {lines.map((_, i) => (
+                  <div key={i} className="leading-relaxed">{i + 1}</div>
+                ))}
+              </div>
+
+              {/* Code Textarea */}
+              <textarea
+                ref={textareaRef}
+                value={localTex}
+                onChange={handleTexInput}
+                onKeyDown={handleKeyDown}
+                spellCheck={false}
+                placeholder="Write or edit LaTeX code here..."
+                className="flex-1 h-full p-3 font-mono text-[12px] leading-relaxed resize-none bg-white text-[#17191C] focus:outline-none overflow-auto select-text selection:bg-[#7C5CFF]/20"
+              />
+            </div>
+
+            {/* Footer Status Bar */}
+            <div className="px-3 py-1.5 bg-[#FAFBFD] border-t border-[#E2E4E9] flex items-center justify-between text-[10px] text-[#8A8F9B]">
+              <span>Press <b>Ctrl + S</b> / <b>Cmd + S</b> to recompile</span>
+              <button
+                onClick={onRecompile}
+                className="text-[#7C5CFF] font-semibold hover:underline"
+              >
+                Recompile Now ⚡
+              </button>
+            </div>
           </div>
         )}
 
@@ -164,6 +300,7 @@ export function RightPreview({
                 }}
               >
                 <iframe
+                  key={pdfPath}
                   src={`${pdfPath}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                   className="w-full h-full border-none"
                   title="Compiled PDF Resume"

@@ -14,11 +14,23 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 });
     }
 
-    const texSource = generateLatexSource(resume.data);
+    let inputTexSource: string | undefined = undefined;
+    try {
+      const body = await request.json();
+      if (body && typeof body.texSource === 'string' && body.texSource.trim().length > 0) {
+        inputTexSource = body.texSource;
+      }
+    } catch {
+      // Body was empty or not JSON
+    }
+
+    const texSource = inputTexSource || resume.texSource || generateLatexSource(resume.data);
     const compileRes = await compileLatexToPdf(texSource, id);
 
     if (compileRes.success && compileRes.pdfRelativePath) {
-      await updateResumeData(id, resume.data, 'Recompiled PDF', compileRes.pdfRelativePath);
+      resume.texSource = texSource;
+      resume.pdfPath = compileRes.pdfRelativePath;
+      await updateResumeData(id, resume.data, 'Recompiled LaTeX PDF', compileRes.pdfRelativePath);
     }
 
     return NextResponse.json({

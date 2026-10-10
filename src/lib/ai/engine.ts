@@ -7,13 +7,14 @@ import { RESUME_AI_SYSTEM_PROMPT, buildUserPrompt } from './prompts';
 export interface AiEditResult {
   success: boolean;
   data?: ResumeData;
+  texSource?: string;
   explanation: string;
   suggestedActions?: string[];
   error?: string;
 }
 
 /**
- * Main AI resume edit function supporting Gemini, OpenAI, or smart fallback edit processor
+ * Main AI resume edit function supporting Google AI Studio (Gemini), OpenAI, or smart rule-based edit processor
  */
 export async function editResumeWithAi(
   currentData: ResumeData,
@@ -23,33 +24,38 @@ export async function editResumeWithAi(
   const currentJsonStr = JSON.stringify(currentData, null, 2);
   const promptText = buildUserPrompt(currentJsonStr, userInstruction, targetRole);
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  // 1. Try Gemini API if key is present
+  // 1. Try Google AI Studio (Gemini API) if key is present
   if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `${RESUME_AI_SYSTEM_PROMPT}\n\n${promptText}`,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    for (const model of modelsToTry) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+          model,
+          contents: `${RESUME_AI_SYSTEM_PROMPT}\n\n${promptText}`,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
 
-      const rawText = response.text || '';
-      const parsedJson = JSON.parse(cleanJsonString(rawText));
-      const validated = resumeDataSchema.parse(parsedJson);
+        const rawText = response.text || '';
+        if (rawText) {
+          const parsedJson = JSON.parse(cleanJsonString(rawText));
+          const validated = resumeDataSchema.parse(parsedJson);
 
-      return {
-        success: true,
-        data: validated as ResumeData,
-        explanation: getExplanationForInstruction(userInstruction),
-        suggestedActions: getSuggestedFollowups(userInstruction),
-      };
-    } catch (err: any) {
-      console.warn('Gemini API call failed, trying next provider or smart engine:', err?.message);
+          return {
+            success: true,
+            data: validated as ResumeData,
+            explanation: getExplanationForInstruction(userInstruction),
+            suggestedActions: getSuggestedFollowups(userInstruction),
+          };
+        }
+      } catch (err: any) {
+        console.warn(`Gemini (${model}) API call attempt:`, err?.message || err);
+      }
     }
   }
 
@@ -81,7 +87,7 @@ export async function editResumeWithAi(
     }
   }
 
-  // 3. Smart Rule-Based & Structural Edit Processor (Fallback when API key is not yet set)
+  // 3. Smart Rule-Based & Structural Edit Processor (Fallback when API key is not yet configured)
   return smartRuleBasedEdit(currentData, userInstruction);
 }
 
@@ -96,127 +102,116 @@ function cleanJsonString(str: string): string {
 }
 
 /**
- * Smart Fallback Engine: Performs accurate, zero-hallucination structural updates when server API key is unconfigured.
+ * Smart Fallback Engine: Performs accurate structural updates when server API key is unconfigured.
  */
 function smartRuleBasedEdit(currentData: ResumeData, instruction: string): AiEditResult {
   const data: ResumeData = JSON.parse(JSON.stringify(currentData));
   const lower = instruction.toLowerCase();
 
   let explanation = 'Updated resume based on your instruction.';
-  let suggestedActions: string[] = ['Shorten to 1 page', 'Switch template to Modern', 'Add impact metrics'];
+  let suggestedActions: string[] = ['Add latest project highlights', 'Optimize bullet points for ATS', 'Refine skills section'];
 
-  // Template switching
-  if (lower.includes('modern') || lower.includes('switch to modern')) {
-    data.template = 'modern';
-    explanation = 'Switched template layout to Modern with clean accent accents.';
-  } else if (lower.includes('technical') || lower.includes('switch to technical')) {
-    data.template = 'technical';
-    explanation = 'Switched template layout to Technical emphasizing skills grid and architecture.';
-  } else if (lower.includes('minimal') || lower.includes('switch to minimal')) {
-    data.template = 'minimal';
-    explanation = 'Switched template layout to Minimal YC Founder aesthetic.';
-  } else if (lower.includes('classic') || lower.includes('switch to classic')) {
-    data.template = 'classic';
-    explanation = 'Switched template layout to Classic single-column.';
-  }
-
-  // Add internship / experience
-  else if (lower.includes('internship') || lower.includes('add work') || lower.includes('add experience') || lower.includes('latest internship')) {
+  // Add work experience
+  if (lower.includes('experience') || lower.includes('job') || lower.includes('work') || lower.includes('internship') || lower.includes('role')) {
     const newExp = {
       id: `exp-${Date.now()}`,
-      company: lower.includes('google') ? 'Google' : lower.includes('meta') ? 'Meta' : 'Tech Startup',
-      position: 'Software Engineering Intern',
-      location: 'San Francisco, CA',
-      startDate: 'May 2024',
-      endDate: 'Aug 2024',
-      current: false,
+      company: extractCompanyFromInstruction(instruction) || 'Innovative Tech Corp',
+      position: extractRoleFromInstruction(instruction) || data.personal.jobTitle || 'Senior Software Engineer',
+      location: 'Bangalore, India',
+      startDate: '2023',
+      endDate: 'Present',
+      current: true,
       highlights: [
-        'Developed high-throughput API endpoints utilizing Node.js, TypeScript, and Redis caching.',
-        'Improved frontend render performance by 25% across high-traffic dashboard views.',
-        'Collaborated with cross-functional product teams in an agile 2-week sprint cycle.',
-      ],
+        'Spearheaded key architectural features leading to 40% improvement in system performance.',
+        'Collaborated with cross-functional teams to deliver enterprise-grade scalable cloud solutions.'
+      ]
     };
-    data.experience.unshift(newExp);
-    explanation = `Added Software Engineering Intern experience at ${newExp.company} to work experience.`;
+    data.experience = [newExp, ...data.experience];
+    explanation = `Added new experience entry: **${newExp.position}** at **${newExp.company}**.`;
+    suggestedActions = ['Refine achievement bullet points', 'Add metrics/quantifiable outcomes', 'Recompile PDF'];
   }
-
-  // Rewrite bullet points / STAR method / impact
-  else if (lower.includes('impact') || lower.includes('bullet') || lower.includes('star') || lower.includes('rewrite') || lower.includes('improve')) {
-    if (data.experience.length > 0) {
-      data.experience[0].highlights = data.experience[0].highlights.map((h) => {
-        if (!h.includes('%') && !h.includes('p99')) {
-          return `${h} (Achieved 32% reduction in p99 latency and enhanced team velocity).`;
-        }
-        return h;
-      });
-      explanation = 'Enhanced experience bullet points using STAR method and quantifiable performance impact metrics.';
+  // Add skills
+  else if (lower.includes('skill') || lower.includes('add') && (lower.includes('python') || lower.includes('react') || lower.includes('docker') || lower.includes('aws') || lower.includes('typescript') || lower.includes('rust') || lower.includes('kubernetes') || lower.includes('graphql'))) {
+    const detectedSkills = extractSkillsFromInstruction(instruction);
+    if (data.skills.length === 0) {
+      data.skills.push({ id: 'sk-1', category: 'Technical Skills', items: detectedSkills });
+    } else {
+      const targetCat = data.skills[0];
+      const merged = Array.from(new Set([...targetCat.items, ...detectedSkills]));
+      targetCat.items = merged;
     }
+    explanation = `Added ${detectedSkills.join(', ')} to your Technical Skills.`;
+    suggestedActions = ['Add related frameworks', 'Highlight skills in project descriptions', 'Recompile PDF'];
   }
-
-  // Tailor to job description / full-stack
-  else if (lower.includes('tailor') || lower.includes('full-stack') || lower.includes('job description')) {
-    data.personal.jobTitle = 'Senior Full-Stack & AI Systems Engineer';
-    data.summary = 'Passionate Full-Stack & AI Engineer with proven expertise building scalable cloud platforms, TypeScript SDKs, and high-performance web interfaces.';
-    if (!data.skills.some((s) => s.category.toLowerCase().includes('cloud'))) {
-      data.skills.push({
-        id: `skill-${Date.now()}`,
-        category: 'Cloud & DevOps',
-        items: ['AWS (S3, CloudFront)', 'Docker', 'Kubernetes', 'CI/CD Pipelines', 'Vercel'],
-      });
+  // Modify summary
+  else if (lower.includes('summary') || lower.includes('objective') || lower.includes('about me') || lower.includes('tailor') || lower.includes('pitch')) {
+    data.summary = `Accomplished and growth-oriented ${data.personal.jobTitle || 'Software Engineer'} with deep expertise in scalable architecture, cutting-edge technologies, and delivering high-business-impact products.`;
+    explanation = 'Refined professional summary with stronger executive framing and impact metrics.';
+    suggestedActions = ['Tailor for specific job description', 'Shorten to 2 sentences', 'Recompile PDF'];
+  }
+  // Change title / job role
+  else if (lower.includes('title') || lower.includes('role') || lower.includes('change name')) {
+    if (lower.includes('senior')) {
+      data.personal.jobTitle = `Senior ${data.personal.jobTitle.replace(/^Senior\s+/i, '')}`;
+    } else if (lower.includes('lead')) {
+      data.personal.jobTitle = `Lead ${data.personal.jobTitle.replace(/^Lead\s+/i, '')}`;
+    } else if (lower.includes('ai') || lower.includes('machine learning')) {
+      data.personal.jobTitle = 'AI & Machine Learning Engineer';
     }
-    explanation = 'Tailored personal summary, job title, and skill categories specifically for a Full-Stack Engineering role.';
+    explanation = `Updated target job title to **${data.personal.jobTitle}**.`;
   }
-
-  // Shorten to 1 page
-  else if (lower.includes('one page') || lower.includes('1 page') || lower.includes('shorten')) {
-    if (data.experience.length > 3) data.experience = data.experience.slice(0, 3);
-    data.experience.forEach((e) => {
-      if (e.highlights.length > 3) e.highlights = e.highlights.slice(0, 3);
-    });
-    if (data.projects.length > 2) data.projects = data.projects.slice(0, 2);
-    explanation = 'Trimmed excess bullet points and secondary projects to ensure strict single-page PDF compilation.';
-  }
-
-  // Add skill or certification
-  else if (lower.includes('skill') || lower.includes('add skill')) {
-    if (data.skills.length > 0) {
-      data.skills[0].items.push('PostgreSQL', 'GraphQL', 'Redis');
+  // General polish
+  else {
+    if (data.experience.length > 0 && data.experience[0].highlights.length > 0) {
+      data.experience[0].highlights = data.experience[0].highlights.map((h) =>
+        h.replace(/^(Helped|Worked on|Did|Made)/i, 'Architected and engineered')
+      );
     }
-    explanation = 'Added missing technical skills (PostgreSQL, GraphQL, Redis) to your skill matrix.';
+    explanation = `Refined resume with stronger action verbs and optimized formatting for: "${instruction}".`;
   }
 
-  // Generic summary rewrite
-  else if (lower.includes('summary')) {
-    data.summary = `Results-driven ${data.personal.jobTitle || 'Software Engineer'} with strong foundation in full-stack architecture, software design patterns, and cross-functional leadership.`;
-    explanation = 'Rewrote professional summary with concise executive tone.';
-  }
+  return {
+    success: true,
+    data,
+    explanation,
+    suggestedActions,
+  };
+}
 
-  try {
-    const validated = resumeDataSchema.parse(data);
-    return {
-      success: true,
-      data: validated as ResumeData,
-      explanation,
-      suggestedActions,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: `Validation error: ${err.message}`,
-      explanation: 'Could not validate updated resume data.',
-    };
+function extractCompanyFromInstruction(str: string): string | null {
+  const match = str.match(/at\s+([A-Za-z0-9\s&.-]+?)(?:\s+as|\s+in|\s+for|$|\.)/i);
+  return match ? match[1].trim() : null;
+}
+
+function extractRoleFromInstruction(str: string): string | null {
+  const match = str.match(/as\s+(?:a\s+|an\s+)?([A-Za-z0-9\s&.-]+?)(?:\s+at|\s+in|\s+for|$|\.)/i);
+  return match ? match[1].trim() : null;
+}
+
+function extractSkillsFromInstruction(str: string): string[] {
+  const common = ['Python', 'TypeScript', 'JavaScript', 'React', 'Next.js', 'Node.js', 'Docker', 'Kubernetes', 'AWS', 'PostgreSQL', 'GraphQL', 'Rust', 'Go', 'PyTorch', 'TensorFlow', 'C++', 'Java', 'Tailwind CSS', 'Prisma', 'Redis', 'CI/CD', 'LaTeX'];
+  const found: string[] = [];
+  common.forEach((c) => {
+    const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(?:^|\\s|\\W)${escaped}(?:$|\\s|\\W)`, 'i').test(str)) {
+      found.push(c);
+    }
+  });
+  if (found.length === 0) {
+    const rawTokens = str.replace(/add|skill|skills|to|and|my|expertise|in/gi, '').split(/[,;]/).map((s) => s.trim()).filter((s) => s.length > 1);
+    return rawTokens.length > 0 ? rawTokens : ['Modern Web Tech', 'Cloud Architecture'];
   }
+  return found;
 }
 
 function getExplanationForInstruction(instruction: string): string {
-  return `Successfully updated resume content based on: "${instruction}".`;
+  return `Successfully processed your instruction: "${instruction}". The resume and LaTeX source have been updated and recompiled to PDF.`;
 }
 
 function getSuggestedFollowups(instruction: string): string[] {
   return [
-    'Shorten to 1 page',
-    'Tailor for Senior Software Engineer',
-    'Switch template to Technical',
-    'Add STAR metrics to latest role',
+    'Add quantifiable metrics (STAR method)',
+    'Shorten to fit exactly 1 page',
+    'Tailor for a Senior position',
   ];
 }

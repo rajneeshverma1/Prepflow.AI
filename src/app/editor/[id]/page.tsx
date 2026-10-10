@@ -42,26 +42,31 @@ function EditorPageContent() {
   // Mobile responsive tab switcher ('chat' vs 'preview')
   const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview');
 
-  // Handle Manual Recompile
-  const handleManualCompile = useCallback(async () => {
+  // Handle Manual/Auto Recompile of LaTeX code
+  const handleManualCompile = useCallback(async (overrideTex?: string) => {
     if (!id) return;
     setIsCompiling(true);
     setCompilationError(undefined);
     try {
-      const res = await fetch(`/api/resumes/${id}/compile`, { method: 'POST' });
+      const codeToCompile = overrideTex || texSource;
+      const res = await fetch(`/api/resumes/${id}/compile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texSource: codeToCompile }),
+      });
       const json = await res.json();
       if (json.success) {
         setPdfPath(json.pdfPath);
-        setTexSource(json.texSource);
+        if (json.texSource) setTexSource(json.texSource);
       } else {
-        setCompilationError(json.error || 'Compilation failed');
+        setCompilationError(json.error || 'LaTeX compilation failed');
       }
     } catch (err: any) {
       setCompilationError(err.message || 'Compilation error');
     } finally {
       setIsCompiling(false);
     }
-  }, [id]);
+  }, [id, texSource]);
 
   // Load resume details from API
   const fetchResumeDetails = useCallback(async () => {
@@ -105,6 +110,11 @@ function EditorPageContent() {
   useEffect(() => {
     fetchResumeDetails();
   }, [fetchResumeDetails]);
+
+  // Handle direct LaTeX code change in the code editor
+  const handleTexChange = (newTex: string) => {
+    setTexSource(newTex);
+  };
 
   // Handle manual structured form edit
   const handleDataChange = async (updatedData: ResumeData) => {
@@ -243,7 +253,7 @@ function EditorPageContent() {
         onOpenLatex={() => {}}
         onDownloadPdf={handleDownloadPdf}
         isCompiling={isCompiling}
-        onManualCompile={handleManualCompile}
+        onManualCompile={() => handleManualCompile(texSource)}
       />
 
       {/* Main Workspace Layout */}
@@ -255,6 +265,9 @@ function EditorPageContent() {
             texSource={texSource || generateLatexSource(resumeData)}
             data={resumeData}
             isCompiling={isCompiling}
+            compilationError={compilationError}
+            onTexChange={handleTexChange}
+            onRecompile={() => handleManualCompile(texSource)}
             onDownloadPdf={handleDownloadPdf}
             onDownloadTex={handleDownloadTex}
           />
@@ -268,7 +281,7 @@ function EditorPageContent() {
             onUploadFile={handleUploadFile}
             isProcessing={isAiProcessing}
             compilationError={compilationError}
-            onRetry={handleManualCompile}
+            onRetry={() => handleManualCompile(texSource)}
           />
         </div>
       </div>
