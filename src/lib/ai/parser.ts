@@ -23,7 +23,15 @@ export async function parseResumeContent(rawText: string, fileName?: string): Pr
 
   // 1. Try Gemini API
   if (geminiKey) {
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const modelsToTry = [
+      'gemini-2.5-flash',
+      'gemini-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-pro-latest',
+      'gemini-3.8-flash',
+      'gemini-1.5-pro'
+    ];
     for (const model of modelsToTry) {
       try {
         const ai = new GoogleGenAI({ apiKey: geminiKey });
