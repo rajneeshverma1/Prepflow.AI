@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, AlertCircle, RefreshCw, Bot, User, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Send, Sparkles, AlertCircle, RefreshCw, Bot, User, CheckCircle2, ArrowRight, Paperclip, Upload } from 'lucide-react';
 import { ChatMessage } from '@/lib/types/resume';
 
 interface CenterChatProps {
   messages: ChatMessage[];
   onSendMessage: (instruction: string) => void;
+  onUploadFile?: (file: File) => void;
   isProcessing: boolean;
   compilationError?: string;
   onRetry: () => void;
@@ -15,19 +16,21 @@ interface CenterChatProps {
 export function CenterChat({
   messages,
   onSendMessage,
+  onUploadFile,
   isProcessing,
   compilationError,
   onRetry,
 }: CenterChatProps) {
   const [inputPrompt, setInputPrompt] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const defaultSuggestions = [
     'Add my latest internship',
     'Rewrite bullet points with STAR impact metrics',
     'Tailor resume for Senior Full-Stack Engineer',
     'Shorten resume to 1 page',
-    'Switch template to Modern',
+    'Highlight React & TypeScript experience',
   ];
 
   useEffect(() => {
@@ -46,6 +49,12 @@ export function CenterChat({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && onUploadFile) {
+      onUploadFile(e.target.files[0]);
     }
   };
 
@@ -161,23 +170,42 @@ export function CenterChat({
 
       {/* Input Box */}
       <div className="p-4 border-t border-[#E2E4E9] bg-white">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.doc,.txt,image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
         <form onSubmit={handleSubmit} className="relative flex items-center">
           <textarea
             rows={2}
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Prepflow.ai to add internships, rewrite bullet points, tailor to job description..."
+            placeholder="Ask Prepflow.ai to edit resume, add internship, or upload a new PDF..."
             disabled={isProcessing}
-            className="w-full pl-4 pr-12 py-3 text-xs rounded-2xl border border-[#E2E4E9] bg-[#F7F7F9] text-[#17191C] focus:outline-hidden focus:border-[#7C5CFF] resize-none"
+            className="w-full pl-4 pr-20 py-3 text-xs rounded-2xl border border-[#E2E4E9] bg-[#F7F7F9] text-[#17191C] focus:outline-hidden focus:border-[#7C5CFF] resize-none"
           />
-          <button
-            type="submit"
-            disabled={!inputPrompt.trim() || isProcessing}
-            className="absolute right-3 p-2 rounded-full bg-[#17191C] text-white disabled:opacity-40 transition-transform hover:-translate-y-px"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
+          <div className="absolute right-3 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className="p-1.5 rounded-full text-[#8A8F9B] hover:text-[#7C5CFF] hover:bg-white transition-colors"
+              title="Upload existing resume (PDF, Image, DOCX)"
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
+            <button
+              type="submit"
+              disabled={!inputPrompt.trim() || isProcessing}
+              className="p-2 rounded-full bg-[#17191C] text-white disabled:opacity-40 transition-transform hover:-translate-y-px"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </form>
         <div className="flex items-center justify-between text-[10px] text-[#8A8F9B] mt-1.5 px-1">
           <span>Press Enter to send, Shift+Enter for newline</span>

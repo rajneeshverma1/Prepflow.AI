@@ -77,13 +77,28 @@ function cleanJsonString(str: string): string {
 }
 
 function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {
-  const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
-  
+  const cleanLines = rawText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => {
+      if (!l) return false;
+      if (l.startsWith('%PDF') || l.startsWith('<<') || l.startsWith('obj') || l.startsWith('endobj') || l.startsWith('xref') || l.startsWith('stream')) return false;
+      if (/^[%\\\/<>]+/.test(l)) return false;
+      return true;
+    });
+
   // Extract email & phone with regex
   const emailMatch = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   const phoneMatch = rawText.match(/(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
-  const name = lines[0] && lines[0].length < 40 ? lines[0] : (fileName?.replace(/\.[^/.]+$/, '') || 'Uploaded Resume User');
-  const jobTitle = lines[1] && lines[1].length < 50 ? lines[1] : 'Software Engineer';
+  
+  const rawNameCandidate = cleanLines[0];
+  const isValidName = rawNameCandidate && rawNameCandidate.length < 40 && !rawNameCandidate.includes('%') && !rawNameCandidate.includes('<');
+  const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : '';
+  const name = isValidName ? rawNameCandidate : (cleanFileName || 'Applicant Name');
+
+  const rawTitleCandidate = cleanLines[1];
+  const isValidTitle = rawTitleCandidate && rawTitleCandidate.length < 50 && !rawTitleCandidate.includes('%') && !rawTitleCandidate.includes('<');
+  const jobTitle = isValidTitle ? rawTitleCandidate : 'Software Engineer';
 
   const experience: ResumeData['experience'] = [];
   const education: ResumeData['education'] = [];
@@ -94,8 +109,8 @@ function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData
   let currentSection = 'summary';
   let summaryText = '';
 
-  for (let i = 2; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 2; i < cleanLines.length; i++) {
+    const line = cleanLines[i];
     const lower = line.toLowerCase();
 
     if (lower.includes('experience') || lower.includes('work history') || lower.includes('employment')) {

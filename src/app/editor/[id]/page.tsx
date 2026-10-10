@@ -144,26 +144,32 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     }
   };
 
-  // Restore revision snapshot
-  const handleRestoreRevision = async (version: number) => {
+  // Handle File Upload from Chat Prompt
+  const handleUploadFile = async (file: File) => {
+    setIsAiProcessing(true);
     setIsCompiling(true);
+    setCompilationError(undefined);
+
     try {
-      const res = await fetch(`/api/resumes/${id}/revisions`, {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/resumes/parse-upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version }),
+        body: formData,
       });
+
       const json = await res.json();
       if (json.success && json.resume) {
-        setResumeData(json.resume.data);
-        setTemplate(json.resume.template || 'classic');
-        setPdfPath(json.resume.pdfPath);
-        setTexSource(json.resume.texSource || '');
-        setRevisions(json.resume.revisions || []);
+        handleDataChange(json.resume.data);
+        handleSendMessage(`Uploaded and parsed new resume file: ${file.name}`);
+      } else {
+        setCompilationError(json.error || 'Failed to parse uploaded resume.');
       }
-    } catch (err) {
-      console.error('Failed to restore version:', err);
+    } catch (err: any) {
+      setCompilationError(err.message || 'Error uploading file.');
     } finally {
+      setIsAiProcessing(false);
       setIsCompiling(false);
     }
   };
@@ -189,51 +195,45 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   if (loading || !resumeData) {
     return (
-      <div className="h-screen bg-[#FAF8F5] dark:bg-[#121214] flex flex-col items-center justify-center space-y-3">
-        <div className="w-8 h-8 rounded-lg bg-[#FF6600] text-white flex items-center justify-center font-bold animate-pulse">
-          YC
+      <div className="h-screen bg-white text-[#17191C] flex flex-col items-center justify-center space-y-3 font-sans">
+        <div className="w-8 h-8 rounded-xl glow-purple text-white flex items-center justify-center font-bold animate-pulse">
+          CV
         </div>
-        <p className="text-xs text-zinc-500 font-medium">Loading PromptCV Resume Workspace...</p>
+        <p className="text-xs text-[#595E68] font-medium">Loading Prepflow.ai Resume Workspace...</p>
       </div>
     );
   }
 
-  const currentVersion = revisions.length > 0 ? revisions[0].version : 1;
-
   return (
-    <div className="h-screen bg-[#FAF8F5] dark:bg-[#121214] text-zinc-900 dark:text-zinc-100 flex flex-col overflow-hidden">
+    <div className="h-screen bg-white text-[#17191C] flex flex-col overflow-hidden font-sans">
       <WorkspaceHeader
         title={title}
         template={template}
         onUpdateTitle={setTitle}
         onUpdateTemplate={handleUpdateTemplate}
-        onOpenRevisions={() => setIsRevisionsOpen(true)}
+        onOpenRevisions={() => {}}
         onOpenLatex={() => {}}
         onDownloadPdf={handleDownloadPdf}
         isCompiling={isCompiling}
         onManualCompile={handleManualCompile}
       />
 
-      {/* Main 3-Panel Responsive Layout */}
+      {/* Main Clean 2-Panel Layout */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Panel: Structured Data Form */}
-        <div className="hidden lg:block">
-          <LeftSidebar data={resumeData} onChange={handleDataChange} />
-        </div>
-
-        {/* Center Panel: AI Chat Interface (Visible on desktop or mobile 'chat' tab) */}
-        <div className={`flex-1 flex flex-col ${mobileTab === 'chat' ? 'block' : 'hidden md:flex'}`}>
+        {/* Left Panel: AI Chat Interface & File Upload */}
+        <div className={`w-full md:w-[50%] flex flex-col ${mobileTab === 'chat' ? 'block' : 'hidden md:flex'}`}>
           <CenterChat
             messages={messages}
             onSendMessage={handleSendMessage}
+            onUploadFile={handleUploadFile}
             isProcessing={isAiProcessing}
             compilationError={compilationError}
             onRetry={handleManualCompile}
           />
         </div>
 
-        {/* Right Panel: Real Compiled PDF Preview & LaTeX Source (Visible on desktop or mobile 'preview' tab) */}
-        <div className={`w-full md:w-[48%] ${mobileTab === 'preview' ? 'block' : 'hidden md:block'}`}>
+        {/* Right Panel: Real Compiled PDF Preview & LaTeX Source */}
+        <div className={`w-full md:w-[50%] ${mobileTab === 'preview' ? 'block' : 'hidden md:block'}`}>
           <RightPreview
             pdfPath={pdfPath}
             texSource={texSource}
@@ -246,33 +246,24 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {/* Mobile Tab Switcher */}
-      <div className="md:hidden border-t border-[#E6E1D7] dark:border-[#27272A] bg-white dark:bg-[#18181B] flex items-center justify-around py-2">
+      <div className="md:hidden border-t border-[#E2E4E9] bg-white flex items-center justify-around py-2">
         <button
           onClick={() => setMobileTab('chat')}
-          className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-lg ${
-            mobileTab === 'chat' ? 'bg-[#FF6600] text-white' : 'text-zinc-500'
+          className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full ${
+            mobileTab === 'chat' ? 'bg-[#17191C] text-white' : 'text-[#595E68]'
           }`}
         >
           <MessageSquare className="w-4 h-4" /> AI Chat
         </button>
         <button
           onClick={() => setMobileTab('preview')}
-          className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-lg ${
-            mobileTab === 'preview' ? 'bg-[#FF6600] text-white' : 'text-zinc-500'
+          className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full ${
+            mobileTab === 'preview' ? 'bg-[#17191C] text-white' : 'text-[#595E68]'
           }`}
         >
           <Eye className="w-4 h-4" /> PDF Preview
         </button>
       </div>
-
-      {/* Version History Modal */}
-      <VersionHistoryModal
-        isOpen={isRevisionsOpen}
-        onClose={() => setIsRevisionsOpen(false)}
-        revisions={revisions}
-        currentVersion={currentVersion}
-        onRestore={handleRestoreRevision}
-      />
     </div>
   );
 }

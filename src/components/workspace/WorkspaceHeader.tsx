@@ -77,23 +77,13 @@ export function WorkspaceHeader({
         )}
       </div>
 
-      {/* Center: Template & Recompile */}
+      {/* Center: Recompile & Classic Template Tag */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1 bg-[#F7F7F9] border border-[#E2E4E9] rounded-full p-1 text-xs">
-          <span className="text-[#8A8F9B] text-[11px] px-2 font-medium">Template:</span>
-          {(['classic', 'modern', 'technical', 'minimal'] as TemplateId[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => onUpdateTemplate(t)}
-              className={`px-3 py-1 rounded-full capitalize font-medium transition-all text-xs ${
-                template === t
-                  ? 'bg-[#17191C] text-white shadow-xs'
-                  : 'text-[#595E68] hover:text-[#17191C]'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5 bg-[#F7F7F9] border border-[#E2E4E9] rounded-full px-3 py-1 text-xs">
+          <span className="text-[#8A8F9B] text-[11px] font-medium">Template:</span>
+          <span className="bg-[#17191C] text-white px-2.5 py-0.5 rounded-full font-medium text-[11px] capitalize">
+            Classic
+          </span>
         </div>
 
         <button
@@ -108,15 +98,6 @@ export function WorkspaceHeader({
 
       {/* Right Controls */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={onOpenRevisions}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#E2E4E9] bg-white text-xs font-medium text-[#595E68] hover:bg-[#F7F7F9]"
-          title="Version history"
-        >
-          <History className="w-3.5 h-3.5 text-[#8A8F9B]" />
-          <span className="hidden sm:inline">History</span>
-        </button>
-
         <button
           onClick={onOpenLatex}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#E2E4E9] bg-white text-xs font-medium text-[#595E68] hover:bg-[#F7F7F9]"
