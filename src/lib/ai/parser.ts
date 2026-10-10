@@ -76,13 +76,28 @@ function cleanJsonString(str: string): string {
   return cleaned;
 }
 
-function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {
+export function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {
   const cleanLines = rawText
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => {
       if (!l) return false;
-      if (l.startsWith('%PDF') || l.startsWith('<<') || l.startsWith('obj') || l.startsWith('endobj') || l.startsWith('xref') || l.startsWith('stream')) return false;
+      if (
+        l.startsWith('%PDF') ||
+        l.startsWith('<<') ||
+        l.startsWith('>>') ||
+        l.startsWith('obj') ||
+        l.startsWith('endobj') ||
+        l.startsWith('xref') ||
+        l.startsWith('stream') ||
+        l.startsWith('endstream') ||
+        l.startsWith('trailer') ||
+        l.startsWith('startxref') ||
+        /^\d+\s+\d+\s+R$/.test(l) ||
+        /^--\s*\d+\s+of\s+\d+\s*--$/.test(l)
+      ) {
+        return false;
+      }
       if (/^[%\\\/<>]+/.test(l)) return false;
       return true;
     });
@@ -94,40 +109,62 @@ function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData
   const linkedinMatch = rawText.match(/linkedin\.com\/in\/[a-zA-Z0-9_-]+/i);
   const websiteMatch = rawText.match(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/i);
 
-  // Name extraction
+  // Name extraction (first prominent non-contact line)
   let name = '';
-  for (let i = 0; i < Math.min(5, cleanLines.length); i++) {
+  for (let i = 0; i < Math.min(8, cleanLines.length); i++) {
     const line = cleanLines[i];
     if (
-      line.length > 2 &&
+      line.length >= 2 &&
       line.length < 40 &&
       !line.includes('@') &&
       !line.includes('.com') &&
-      !/^(experience|education|projects|skills|summary|curriculum|resume)/i.test(line)
+      !line.includes('github') &&
+      !line.includes('linkedin') &&
+      !/^\+?\d/.test(line) &&
+      !/^(experience|education|projects|skills|summary|curriculum|resume|work|contact|profile)/i.test(line)
     ) {
-      name = line;
-      break;
+      name = line.replace(/[^a-zA-Z\s.-]/g, '').trim();
+      if (name.length >= 2) break;
     }
   }
   if (!name && fileName) {
     name = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
   }
-  if (!name) name = 'Applicant Name';
+  if (!name) name = 'Candidate Name';
 
   // Job Title candidate
   let jobTitle = 'Software Engineer';
-  for (let i = 0; i < Math.min(6, cleanLines.length); i++) {
+  for (let i = 0; i < Math.min(10, cleanLines.length); i++) {
     const line = cleanLines[i];
     if (
       line !== name &&
       line.length > 3 &&
-      line.length < 50 &&
+      line.length < 60 &&
       !line.includes('@') &&
       !/^\+?\d/.test(line) &&
-      /engineer|developer|manager|designer|analyst|architect|consultant|intern|specialist|lead|scientist/i.test(line)
+      /engineer|developer|manager|designer|analyst|architect|consultant|intern|specialist|lead|scientist|programmer|student|fresher|consultant/i.test(line)
     ) {
       jobTitle = line;
       break;
+    }
+  }
+
+  // Location Candidate
+  let location = 'Bangalore, India';
+  for (let i = 0; i < Math.min(12, cleanLines.length); i++) {
+    const line = cleanLines[i];
+    if (
+      line !== name &&
+      line !== jobTitle &&
+      /[A-Z][a-zA-Z\s]+,\s*[A-Z][a-zA-Z\s]+|[A-Z][a-zA-Z]+,\s*[A-Z]{2}/.test(line) &&
+      !line.includes('@') &&
+      !line.includes('http')
+    ) {
+      const match = line.match(/[A-Za-z\s]+,\s*[A-Za-z\s]+/);
+      if (match) {
+        location = match[0].trim();
+        break;
+      }
     }
   }
 
@@ -145,122 +182,225 @@ function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData
     const lower = line.toLowerCase();
 
     // Section header detection
-    if (/^(experience|work experience|employment|professional experience|work history)/i.test(lower)) {
+    if (/^(experience|work experience|employment|employment history|professional experience|work history|career history)/i.test(lower)) {
       currentSection = 'experience';
       continue;
-    } else if (/^(education|academic background|academics|university)/i.test(lower)) {
+    } else if (/^(education|academic background|academics|university|academic qualification|qualifications)/i.test(lower)) {
       currentSection = 'education';
       continue;
-    } else if (/^(projects|personal projects|technical projects|key projects)/i.test(lower)) {
+    } else if (/^(projects|personal projects|technical projects|key projects|academic projects)/i.test(lower)) {
       currentSection = 'projects';
       continue;
-    } else if (/^(skills|technical skills|skills & expertise|core competencies|technologies)/i.test(lower)) {
+    } else if (/^(skills|technical skills|skills & expertise|core competencies|technologies|tools & technologies|programming languages)/i.test(lower)) {
       currentSection = 'skills';
       continue;
-    } else if (/^(summary|professional summary|about me|profile|objective)/i.test(lower)) {
+    } else if (/^(summary|professional summary|about me|profile|career objective|objective)/i.test(lower)) {
       currentSection = 'summary';
       continue;
     }
 
     if (currentSection === 'summary') {
-      if (summaryText.length < 500) {
+      if (summaryText.length < 600) {
         summaryText += (summaryText ? ' ' : '') + line;
       }
     } else if (currentSection === 'experience') {
-      // Look for role / company / dates
-      const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*');
-      if (isBullet) {
-        if (experience.length === 0) {
-          experience.push({
-            id: `exp-${Date.now()}`,
-            company: 'Tech Company',
-            position: jobTitle,
-            startDate: '2022',
-            endDate: 'Present',
-            current: true,
-            highlights: [],
-          });
+      const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || /^\d+\.\s*/.test(line);
+      const hasDate = /(20\d\d|19\d\d|present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(line);
+      const isRoleCompanyHeader = !isBullet && (hasDate || line.includes('|') || line.includes('—') || line.includes(' - ') || line.length < 60);
+
+      if (isRoleCompanyHeader && experience.length < 10) {
+        let comp = line;
+        let pos = jobTitle;
+        let sDate = '2022';
+        let eDate = 'Present';
+
+        // Extract dates if present
+        const dateMatch = line.match(/(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+)?(?:19|20)\d{2}(?:\s*(?:-|–|to)\s*(?:(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+)?(?:19|20)\d{2}|Present|Current))?/i);
+        if (dateMatch) {
+          const dStr = dateMatch[0];
+          const parts = dStr.split(/[-–]|to/i).map((s) => s.trim());
+          if (parts[0]) sDate = parts[0];
+          if (parts[1]) eDate = parts[1];
+          comp = comp.replace(dateMatch[0], '').replace(/[()|–—]/g, ' ').trim();
         }
-        experience[experience.length - 1].highlights.push(line.replace(/^[•\-*]\s*/, ''));
-      } else if (line.length < 60) {
-        // Potential new role or company header
-        const dateMatch = line.match(/(20\d\d|19\d\d|present|current)/i);
-        if (dateMatch || experience.length === 0) {
-          experience.push({
-            id: `exp-${Date.now()}-${experience.length}`,
-            company: line,
-            position: jobTitle,
-            startDate: '2022',
-            endDate: 'Present',
-            current: true,
-            highlights: [],
-          });
+
+        if (comp.includes('|') || comp.includes('—') || comp.includes(' - ')) {
+          const splitParts = comp.split(/[|—]|\s+-\s+/).map((s) => s.trim()).filter(Boolean);
+          if (splitParts.length >= 2) {
+            pos = splitParts[0];
+            comp = splitParts[1];
+          }
+        }
+
+        experience.push({
+          id: `exp-${Date.now()}-${experience.length}`,
+          company: comp || 'Company',
+          position: pos || jobTitle,
+          startDate: sDate,
+          endDate: eDate,
+          current: /present|current/i.test(eDate),
+          highlights: [],
+        });
+      } else {
+        // Bullet or description line
+        const bulletText = line.replace(/^[•\-*\d.]+\s*/, '').trim();
+        if (bulletText.length > 3) {
+          if (experience.length === 0) {
+            experience.push({
+              id: `exp-${Date.now()}`,
+              company: 'Company / Project',
+              position: jobTitle,
+              startDate: '2022',
+              endDate: 'Present',
+              current: true,
+              highlights: [],
+            });
+          }
+          experience[experience.length - 1].highlights.push(bulletText);
         }
       }
     } else if (currentSection === 'education') {
-      if (education.length === 0 || /university|college|institute|school|bachelor|master|b\.tech|degree/i.test(line)) {
+      const hasDate = /(20\d\d|19\d\d)/.test(line);
+      const hasEduKeyword = /university|college|institute|school|bachelor|master|b\.tech|b\.e\.|m\.tech|b\.s\.|m\.s\.|degree|diploma|phd|gpa/i.test(line);
+      
+      if (hasEduKeyword || hasDate || education.length === 0) {
+        let degree = 'Bachelor of Technology';
+        let institution = line;
+        let sDate = '2020';
+        let eDate = '2024';
+
+        const dateMatch = line.match(/(?:19|20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|Present)/);
+        if (dateMatch) {
+          const parts = dateMatch[0].split(/[-–]/).map((s) => s.trim());
+          sDate = parts[0] || '2020';
+          eDate = parts[1] || '2024';
+          institution = institution.replace(dateMatch[0], '').replace(/[()|]/g, ' ').trim();
+        }
+
+        if (/bachelor|b\.tech|b\.e|b\.s/i.test(line)) degree = 'Bachelor of Science / Technology';
+        else if (/master|m\.tech|m\.s|mba/i.test(line)) degree = 'Master of Science';
+
         education.push({
           id: `edu-${Date.now()}-${education.length}`,
-          institution: line,
-          degree: 'Bachelor of Science in Computer Science',
-          startDate: '2020',
-          endDate: '2024',
+          institution: institution || 'University / Institute',
+          degree: degree,
+          startDate: sDate,
+          endDate: eDate,
           highlights: [],
         });
       }
     } else if (currentSection === 'skills') {
-      const items = line.split(/[,|•;]/).map((s) => s.trim()).filter((s) => s.length > 1 && s.length < 35);
+      let category = 'Technical Skills';
+      let itemsStr = line;
+
+      if (line.includes(':')) {
+        const parts = line.split(':');
+        category = parts[0].trim();
+        itemsStr = parts.slice(1).join(':');
+      }
+
+      const items = itemsStr
+        .split(/[,|•;·\t]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 2 && s.length < 40 && !s.toLowerCase().startsWith('skills'));
+
       if (items.length > 0) {
-        if (skills.length === 0) {
-          skills.push({ id: `sk-1`, category: 'Technical Skills', items: [] });
+        const existingCat = skills.find((s) => s.category.toLowerCase() === category.toLowerCase());
+        if (existingCat) {
+          existingCat.items.push(...items);
+        } else {
+          skills.push({
+            id: `sk-${skills.length + 1}`,
+            category: category || 'Skills',
+            items: items,
+          });
         }
-        skills[0].items.push(...items);
       }
     } else if (currentSection === 'projects') {
-      if (line.startsWith('•') || line.startsWith('-')) {
+      const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*');
+      if (isBullet) {
         if (projects.length === 0) {
           projects.push({
             id: `proj-${Date.now()}`,
-            name: 'Key Technical Project',
+            name: 'Key Project',
             description: '',
             highlights: [],
-            techStack: ['TypeScript', 'React', 'Node.js'],
+            techStack: ['TypeScript', 'React'],
           });
         }
-        projects[projects.length - 1].highlights.push(line.replace(/^[•\-*]\s*/, ''));
-      } else if (line.length < 50) {
+        projects[projects.length - 1].highlights.push(line.replace(/^[•\-*]\s*/, '').trim());
+      } else if (line.length < 60) {
         projects.push({
           id: `proj-${Date.now()}-${projects.length}`,
-          name: line,
+          name: line.replace(/[|:–—].*$/, '').trim(),
           description: '',
           highlights: [],
-          techStack: ['TypeScript', 'Node.js'],
+          techStack: ['TypeScript', 'React'],
         });
       }
     }
   }
 
-  // Deduplicate skills
-  if (skills.length > 0 && skills[0].items.length > 0) {
-    skills[0].items = Array.from(new Set(skills[0].items));
-  }
+  // Deduplicate skills in all categories
+  skills.forEach((s) => {
+    s.items = Array.from(new Set(s.items));
+  });
 
   return {
     personal: {
-      fullName: name,
-      jobTitle: jobTitle,
-      email: emailMatch ? emailMatch[0] : 'user@example.com',
-      phone: phoneMatch ? phoneMatch[0] : '+1 (555) 000-0000',
-      location: 'San Francisco, CA',
+      fullName: name || 'Candidate Name',
+      jobTitle: jobTitle || 'Software Engineer',
+      email: emailMatch ? emailMatch[0] : 'candidate@example.com',
+      phone: phoneMatch ? phoneMatch[0] : '+91 98765 43210',
+      location: location,
       github: githubMatch ? `https://${githubMatch[0]}` : undefined,
       linkedin: linkedinMatch ? `https://${linkedinMatch[0]}` : undefined,
       website: websiteMatch ? websiteMatch[0] : undefined,
     },
-    summary: summaryText || 'Experienced professional with a proven background in building scalable systems, high-quality deliverables, and technical execution.',
-    experience: experience.length > 0 ? experience : SAMPLE_FULLSTACK_RESUME.experience,
-    education: education.length > 0 ? education : SAMPLE_FULLSTACK_RESUME.education,
-    projects: projects.length > 0 ? projects : SAMPLE_FULLSTACK_RESUME.projects,
-    skills: skills.length > 0 && skills[0].items.length > 0 ? skills : SAMPLE_FULLSTACK_RESUME.skills,
+    summary: summaryText || 'Dynamic and results-driven professional with strong technical expertise, proven problem-solving abilities, and a track record of high-impact execution.',
+    experience: experience.length > 0 ? experience : [
+      {
+        id: `exp-${Date.now()}`,
+        company: 'Technology Solutions',
+        position: jobTitle,
+        startDate: '2022',
+        endDate: 'Present',
+        current: true,
+        highlights: [
+          'Engineered and delivered core software features, improving system throughput and performance.',
+          'Collaborated with cross-functional teams to design, implement, and deploy production-grade solutions.'
+        ]
+      }
+    ],
+    education: education.length > 0 ? education : [
+      {
+        id: `edu-${Date.now()}`,
+        institution: 'University Institute of Technology',
+        degree: 'Bachelor of Technology in Computer Science',
+        startDate: '2019',
+        endDate: '2023',
+        highlights: []
+      }
+    ],
+    projects: projects.length > 0 ? projects : [
+      {
+        id: `proj-1`,
+        name: 'Full Stack Web Platform',
+        description: 'High performance web application built with modern frameworks',
+        highlights: [
+          'Implemented responsive UI and RESTful API backend handling real-time data sync.',
+          'Optimized database queries and deployed automated CI/CD build pipelines.'
+        ],
+        techStack: ['TypeScript', 'Next.js', 'PostgreSQL', 'Tailwind CSS']
+      }
+    ],
+    skills: skills.length > 0 ? skills : [
+      {
+        id: 'sk-1',
+        category: 'Technical Skills',
+        items: ['TypeScript', 'JavaScript', 'React', 'Next.js', 'Node.js', 'PostgreSQL', 'Git', 'LaTeX']
+      }
+    ],
     certifications: [],
     template: 'classic',
   };

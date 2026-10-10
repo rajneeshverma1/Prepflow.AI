@@ -3,21 +3,10 @@ import { parseResumeContent } from '@/lib/ai/parser';
 import { createResume, updateResumeData } from '@/lib/db/resumeStore';
 import { generateLatexSource } from '@/lib/latex/renderer';
 import { compileLatexToPdf } from '@/lib/latex/compiler';
+import { extractTextFromPdfBuffer } from '@/lib/pdf/extractor';
 
 export async function POST(req: Request) {
   try {
-    // Polyfill DOMMatrix for PDF.js / pdf-parse in Node runtime
-    if (typeof globalThis.DOMMatrix === 'undefined') {
-      (globalThis as any).DOMMatrix = class DOMMatrix { constructor() {} };
-    }
-
-    let pdfParse: any = null;
-    try {
-      pdfParse = require('pdf-parse');
-    } catch (reqErr) {
-      console.warn('Failed to require pdf-parse:', reqErr);
-    }
-
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const textPrompt = formData.get('text') as string | null;
@@ -31,30 +20,18 @@ export async function POST(req: Request) {
       const buffer = Buffer.from(arrayBuffer);
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        try {
-          if (pdfParse) {
-            const parseFunc = typeof pdfParse === 'function' ? pdfParse : (pdfParse.default || pdfParse);
-            if (typeof parseFunc === 'function') {
-              const parsedPdf = await parseFunc(buffer);
-              extractedText = parsedPdf.text || '';
-            } else if (pdfParse.PDFParse) {
-              const parser = new pdfParse.PDFParse(buffer);
-              extractedText = (await parser.getText()) || '';
-            }
-          }
-        } catch (pdfErr) {
-          console.warn('pdf-parse execution error, applying fallback string extraction:', pdfErr);
-        }
-
-        // Fallback string extraction if pdf-parse text is empty
-        if (!extractedText || extractedText.trim().length < 10) {
-          const rawStr = buffer.toString('binary');
-          const strings = rawStr.match(/[\x20-\x7E\s]{4,}/g) || [];
-          extractedText = strings.join(' ');
+        extractedText = await extractTextFromPdfBuffer(buffer);
+      } else if (file.name.toLowerCase().endsWith('.docx') || file.type.includes('wordprocessingml')) {
+        // DOCX extraction from XML stream
+        const rawDocx = buffer.toString('utf8');
+        const matches = rawDocx.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || [];
+        if (matches.length > 0) {
+          extractedText = matches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ');
+        } else {
+          extractedText = buffer.toString('utf8');
         }
       } else if (file.type.startsWith('image/')) {
-        // Image upload: fallback text extracted from filename or description
-        extractedText = `Uploaded Resume Image: ${fileName}\nExtract and structure professional resume details for ${fileName.replace(/\.[^/.]+$/, '')}`;
+        extractedText = `Uploaded Resume Image: ${fileName}\nCandidate Name: ${fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')}\nSoftware Engineer Resume`;
       } else {
         extractedText = buffer.toString('utf8');
       }
@@ -66,7 +43,7 @@ export async function POST(req: Request) {
     extractedText = extractedText.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, ' ').trim();
 
     if (!extractedText || extractedText.length < 5) {
-      extractedText = `Resume Document: ${fileName}\nCandidate Name: ${fileName.replace(/\.[^/.]+$/, '')}\nSoftware Engineer Resume`;
+      extractedText = `Resume Document: ${fileName}\nCandidate Name: ${fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')}\nSoftware Engineer Resume`;
     }
 
     // 1. AI Parsing into structured ResumeData JSON
@@ -80,7 +57,7 @@ export async function POST(req: Request) {
 
     // 2. Generate LaTeX Source & Compile PDF
     const texSource = generateLatexSource(parsedData);
-    const title = parsedData.personal.fullName && parsedData.personal.fullName !== 'Applicant Name'
+    const title = parsedData.personal.fullName && parsedData.personal.fullName !== 'Candidate Name' && parsedData.personal.fullName !== 'Applicant Name'
       ? `${parsedData.personal.fullName} – Resume`
       : (fileName.replace(/\.[^/.]+$/, '') || 'Uploaded Resume');
 

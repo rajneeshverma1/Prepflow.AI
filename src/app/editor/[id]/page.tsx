@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
 import { CenterChat } from '@/components/workspace/CenterChat';
@@ -10,7 +10,18 @@ import { SAMPLE_FULLSTACK_RESUME } from '@/lib/sample/defaultResume';
 import { generateLatexSource } from '@/lib/latex/renderer';
 import { MessageSquare, Eye } from 'lucide-react';
 
-export default function EditorPage() {
+function EditorLoading() {
+  return (
+    <div className="h-screen bg-white text-[#17191C] flex flex-col items-center justify-center space-y-3 font-sans">
+      <div className="w-8 h-8 rounded-xl glow-purple text-white flex items-center justify-center font-bold animate-pulse">
+        CV
+      </div>
+      <p className="text-xs text-[#595E68] font-medium">Loading Prepflow.ai Resume Workspace...</p>
+    </div>
+  );
+}
+
+function EditorPageContent() {
   const router = useRouter();
   const routeParams = useParams();
   const id = typeof routeParams?.id === 'string' ? routeParams.id : (Array.isArray(routeParams?.id) ? routeParams.id[0] : '');
@@ -218,14 +229,7 @@ export default function EditorPage() {
   };
 
   if (loading || !resumeData) {
-    return (
-      <div className="h-screen bg-white text-[#17191C] flex flex-col items-center justify-center space-y-3 font-sans">
-        <div className="w-8 h-8 rounded-xl glow-purple text-white flex items-center justify-center font-bold animate-pulse">
-          CV
-        </div>
-        <p className="text-xs text-[#595E68] font-medium">Loading Prepflow.ai Resume Workspace...</p>
-      </div>
-    );
+    return <EditorLoading />;
   }
 
   return (
@@ -289,5 +293,13 @@ export default function EditorPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function EditorPage() {
+  return (
+    <Suspense fallback={<EditorLoading />}>
+      <EditorPageContent />
+    </Suspense>
   );
 }
