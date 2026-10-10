@@ -118,7 +118,7 @@ export function RightPreview({
       </div>
 
       {/* Main Preview Container */}
-      <div className="flex-1 overflow-auto p-4 sm:p-6 flex items-start justify-center relative">
+      <div className="flex-1 overflow-hidden p-3 sm:p-4 flex items-center justify-center relative">
         {isCompiling && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-2xs z-20 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="w-6 h-6 text-[#7C5CFF] animate-spin" />
@@ -131,17 +131,17 @@ export function RightPreview({
         {activeTab === 'pdf' ? (
           pdfPath ? (
             <div
-              className="bg-white shadow-2xl rounded-xs transition-all duration-150 origin-top overflow-hidden border border-[#E2E4E9] my-2"
+              className="bg-white shadow-2xl rounded-xs transition-all duration-150 overflow-hidden border border-[#E2E4E9] flex items-center justify-center"
               style={{
-                width: `${(8.5 * 105 * zoom) / 100}%`,
-                maxWidth: '850px',
-                minWidth: '320px',
-                height: `${(11 * 105 * zoom) / 100}vh`,
-                minHeight: '850px',
+                aspectRatio: '1 / 1.4142',
+                maxHeight: 'calc(100vh - 6rem)',
+                maxWidth: '100%',
+                width: `${(100 * zoom) / 100}%`,
+                height: '100%',
               }}
             >
               <iframe
-                src={`${pdfPath}#toolbar=0&navpanes=0&scrollbar=0`}
+                src={`${pdfPath}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                 className="w-full h-full border-none"
                 title="Compiled PDF Resume"
               />
@@ -149,10 +149,12 @@ export function RightPreview({
           ) : (
             /* Fallback Sheet */
             <div
-              className="bg-white text-[#17191C] shadow-2xl p-8 rounded-xs transition-all origin-top border border-[#E2E4E9]"
+              className="bg-white text-[#17191C] shadow-2xl p-6 sm:p-8 rounded-xs transition-all border border-[#E2E4E9] overflow-y-auto"
               style={{
-                width: `${(8.5 * 96 * zoom) / 100}px`,
-                minHeight: `${(11 * 96 * zoom) / 100}px`,
+                aspectRatio: '1 / 1.4142',
+                maxHeight: 'calc(100vh - 6rem)',
+                maxWidth: '100%',
+                height: '100%',
               }}
             >
               <div className="text-center border-b border-[#E2E4E9] pb-4 mb-4">
