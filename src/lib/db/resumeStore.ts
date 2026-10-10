@@ -165,7 +165,15 @@ export async function getResumeById(id: string) {
     console.warn('Prisma query failed, checking memory store:', err);
   }
 
-  return memoryResumes.get(id) || null;
+  // Fallback to memory store if DB returns null or fails
+  const memoryResume = memoryResumes.get(id);
+  if (memoryResume) {
+    if (!memoryResume.texSource && memoryResume.data) {
+      memoryResume.texSource = generateLatexSource(memoryResume.data);
+    }
+    return memoryResume;
+  }
+  return null;
 }
 
 export async function createResume(params: {
