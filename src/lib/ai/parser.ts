@@ -87,54 +87,93 @@ function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData
       return true;
     });
 
-  // Extract email & phone with regex
+  // Extract contact links & info
   const emailMatch = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-  const phoneMatch = rawText.match(/(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
-  
-  const rawNameCandidate = cleanLines[0];
-  const isValidName = rawNameCandidate && rawNameCandidate.length < 40 && !rawNameCandidate.includes('%') && !rawNameCandidate.includes('<');
-  const cleanFileName = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : '';
-  const name = isValidName ? rawNameCandidate : (cleanFileName || 'Applicant Name');
+  const phoneMatch = rawText.match(/(\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\+?\d{10,13}/);
+  const githubMatch = rawText.match(/github\.com\/[a-zA-Z0-9_-]+/i);
+  const linkedinMatch = rawText.match(/linkedin\.com\/in\/[a-zA-Z0-9_-]+/i);
+  const websiteMatch = rawText.match(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/i);
 
-  const rawTitleCandidate = cleanLines[1];
-  const isValidTitle = rawTitleCandidate && rawTitleCandidate.length < 50 && !rawTitleCandidate.includes('%') && !rawTitleCandidate.includes('<');
-  const jobTitle = isValidTitle ? rawTitleCandidate : 'Software Engineer';
+  // Name extraction
+  let name = '';
+  for (let i = 0; i < Math.min(5, cleanLines.length); i++) {
+    const line = cleanLines[i];
+    if (
+      line.length > 2 &&
+      line.length < 40 &&
+      !line.includes('@') &&
+      !line.includes('.com') &&
+      !/^(experience|education|projects|skills|summary|curriculum|resume)/i.test(line)
+    ) {
+      name = line;
+      break;
+    }
+  }
+  if (!name && fileName) {
+    name = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  }
+  if (!name) name = 'Applicant Name';
 
+  // Job Title candidate
+  let jobTitle = 'Software Engineer';
+  for (let i = 0; i < Math.min(6, cleanLines.length); i++) {
+    const line = cleanLines[i];
+    if (
+      line !== name &&
+      line.length > 3 &&
+      line.length < 50 &&
+      !line.includes('@') &&
+      !/^\+?\d/.test(line) &&
+      /engineer|developer|manager|designer|analyst|architect|consultant|intern|specialist|lead|scientist/i.test(line)
+    ) {
+      jobTitle = line;
+      break;
+    }
+  }
+
+  // Section Segmentation
   const experience: ResumeData['experience'] = [];
   const education: ResumeData['education'] = [];
   const projects: ResumeData['projects'] = [];
   const skills: ResumeData['skills'] = [];
-
-  // Simple heuristic section parsing
-  let currentSection = 'summary';
   let summaryText = '';
 
-  for (let i = 2; i < cleanLines.length; i++) {
+  let currentSection: 'header' | 'summary' | 'experience' | 'education' | 'projects' | 'skills' = 'header';
+
+  for (let i = 0; i < cleanLines.length; i++) {
     const line = cleanLines[i];
     const lower = line.toLowerCase();
 
-    if (lower.includes('experience') || lower.includes('work history') || lower.includes('employment')) {
+    // Section header detection
+    if (/^(experience|work experience|employment|professional experience|work history)/i.test(lower)) {
       currentSection = 'experience';
       continue;
-    } else if (lower.includes('education') || lower.includes('academic') || lower.includes('university')) {
+    } else if (/^(education|academic background|academics|university)/i.test(lower)) {
       currentSection = 'education';
       continue;
-    } else if (lower.includes('project') || lower.includes('portfolio')) {
+    } else if (/^(projects|personal projects|technical projects|key projects)/i.test(lower)) {
       currentSection = 'projects';
       continue;
-    } else if (lower.includes('skill') || lower.includes('technolog')) {
+    } else if (/^(skills|technical skills|skills & expertise|core competencies|technologies)/i.test(lower)) {
       currentSection = 'skills';
+      continue;
+    } else if (/^(summary|professional summary|about me|profile|objective)/i.test(lower)) {
+      currentSection = 'summary';
       continue;
     }
 
-    if (currentSection === 'summary' && summaryText.length < 300) {
-      summaryText += (summaryText ? ' ' : '') + line;
+    if (currentSection === 'summary') {
+      if (summaryText.length < 500) {
+        summaryText += (summaryText ? ' ' : '') + line;
+      }
     } else if (currentSection === 'experience') {
-      if (experience.length === 0 || line.startsWith('•') || line.startsWith('-')) {
+      // Look for role / company / dates
+      const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*');
+      if (isBullet) {
         if (experience.length === 0) {
           experience.push({
             id: `exp-${Date.now()}`,
-            company: 'Parsed Company',
+            company: 'Tech Company',
             position: jobTitle,
             startDate: '2022',
             endDate: 'Present',
@@ -142,17 +181,70 @@ function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData
             highlights: [],
           });
         }
-        experience[0].highlights.push(line.replace(/^[•\-*]\s*/, ''));
+        experience[experience.length - 1].highlights.push(line.replace(/^[•\-*]\s*/, ''));
+      } else if (line.length < 60) {
+        // Potential new role or company header
+        const dateMatch = line.match(/(20\d\d|19\d\d|present|current)/i);
+        if (dateMatch || experience.length === 0) {
+          experience.push({
+            id: `exp-${Date.now()}-${experience.length}`,
+            company: line,
+            position: jobTitle,
+            startDate: '2022',
+            endDate: 'Present',
+            current: true,
+            highlights: [],
+          });
+        }
+      }
+    } else if (currentSection === 'education') {
+      if (education.length === 0 || /university|college|institute|school|bachelor|master|b\.tech|degree/i.test(line)) {
+        education.push({
+          id: `edu-${Date.now()}-${education.length}`,
+          institution: line,
+          degree: 'Bachelor of Science in Computer Science',
+          startDate: '2020',
+          endDate: '2024',
+          highlights: [],
+        });
       }
     } else if (currentSection === 'skills') {
-      if (skills.length === 0) {
-        skills.push({ id: `sk-1`, category: 'Technical Skills', items: [] });
+      const items = line.split(/[,|•;]/).map((s) => s.trim()).filter((s) => s.length > 1 && s.length < 35);
+      if (items.length > 0) {
+        if (skills.length === 0) {
+          skills.push({ id: `sk-1`, category: 'Technical Skills', items: [] });
+        }
+        skills[0].items.push(...items);
       }
-      skills[0].items.push(...line.split(/[,|]/).map((s) => s.trim()).filter(Boolean));
+    } else if (currentSection === 'projects') {
+      if (line.startsWith('•') || line.startsWith('-')) {
+        if (projects.length === 0) {
+          projects.push({
+            id: `proj-${Date.now()}`,
+            name: 'Key Technical Project',
+            description: '',
+            highlights: [],
+            techStack: ['TypeScript', 'React', 'Node.js'],
+          });
+        }
+        projects[projects.length - 1].highlights.push(line.replace(/^[•\-*]\s*/, ''));
+      } else if (line.length < 50) {
+        projects.push({
+          id: `proj-${Date.now()}-${projects.length}`,
+          name: line,
+          description: '',
+          highlights: [],
+          techStack: ['TypeScript', 'Node.js'],
+        });
+      }
     }
   }
 
-  // Merge with sensible defaults if parsing is sparse
+  // Deduplicate skills
+  if (skills.length > 0 && skills[0].items.length > 0) {
+    skills[0].items = Array.from(new Set(skills[0].items));
+  }
+
   return {
     personal: {
       fullName: name,
@@ -160,14 +252,15 @@ function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData
       email: emailMatch ? emailMatch[0] : 'user@example.com',
       phone: phoneMatch ? phoneMatch[0] : '+1 (555) 000-0000',
       location: 'San Francisco, CA',
-      github: 'https://github.com',
-      linkedin: 'https://linkedin.com',
+      github: githubMatch ? `https://${githubMatch[0]}` : undefined,
+      linkedin: linkedinMatch ? `https://${linkedinMatch[0]}` : undefined,
+      website: websiteMatch ? websiteMatch[0] : undefined,
     },
-    summary: summaryText || 'Experienced software developer with a strong track record of engineering impact and technical execution.',
+    summary: summaryText || 'Experienced professional with a proven background in building scalable systems, high-quality deliverables, and technical execution.',
     experience: experience.length > 0 ? experience : SAMPLE_FULLSTACK_RESUME.experience,
     education: education.length > 0 ? education : SAMPLE_FULLSTACK_RESUME.education,
     projects: projects.length > 0 ? projects : SAMPLE_FULLSTACK_RESUME.projects,
-    skills: skills.length > 0 ? skills : SAMPLE_FULLSTACK_RESUME.skills,
+    skills: skills.length > 0 && skills[0].items.length > 0 ? skills : SAMPLE_FULLSTACK_RESUME.skills,
     certifications: [],
     template: 'classic',
   };

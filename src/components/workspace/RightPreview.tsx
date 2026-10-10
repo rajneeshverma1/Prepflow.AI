@@ -22,7 +22,7 @@ export function RightPreview({
   onDownloadTex,
 }: RightPreviewProps) {
   const [zoom, setZoom] = useState(100);
-  const [activeTab, setActiveTab] = useState<'pdf' | 'latex'>('pdf');
+  const [viewMode, setViewMode] = useState<'split' | 'pdf' | 'latex'>('split');
   const [copied, setCopied] = useState(false);
 
   const handleCopyLatex = () => {
@@ -38,87 +38,97 @@ export function RightPreview({
   return (
     <section className="flex-1 h-[calc(100vh-3.5rem)] bg-[#F7F7F9] flex flex-col min-w-0 border-r border-[#E2E4E9]">
       {/* Top preview toolbar */}
-      <div className="h-11 border-b border-[#E2E4E9] bg-white px-4 flex items-center justify-between text-xs">
-        {/* Toggle PDF vs LaTeX View */}
+      <div className="h-11 border-b border-[#E2E4E9] bg-white px-4 flex items-center justify-between text-xs shrink-0">
+        {/* Toggle PDF vs LaTeX vs Split View */}
         <div className="flex items-center gap-1 bg-[#F7F7F9] p-0.5 rounded-full border border-[#E2E4E9]">
           <button
-            onClick={() => setActiveTab('pdf')}
-            className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full font-medium transition-all ${
-              activeTab === 'pdf'
+            onClick={() => setViewMode('split')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-all ${
+              viewMode === 'split'
+                ? 'bg-white text-[#17191C] shadow-2xs font-semibold'
+                : 'text-[#595E68] hover:text-[#17191C]'
+            }`}
+          >
+            <span>Split (LaTeX + PDF)</span>
+          </button>
+          <button
+            onClick={() => setViewMode('pdf')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-all ${
+              viewMode === 'pdf'
                 ? 'bg-white text-[#17191C] shadow-2xs font-semibold'
                 : 'text-[#595E68] hover:text-[#17191C]'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Compiled PDF</span>
+            <span>PDF Only</span>
           </button>
           <button
-            onClick={() => setActiveTab('latex')}
-            className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full font-medium transition-all ${
-              activeTab === 'latex'
+            onClick={() => setViewMode('latex')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-medium transition-all ${
+              viewMode === 'latex'
                 ? 'bg-white text-[#17191C] shadow-2xs font-semibold'
                 : 'text-[#595E68] hover:text-[#17191C]'
             }`}
           >
             <Code className="w-3.5 h-3.5" />
-            <span>LaTeX Source</span>
+            <span>LaTeX Only</span>
           </button>
         </div>
 
-        {/* PDF Zoom Controls */}
-        {activeTab === 'pdf' && (
-          <div className="flex items-center gap-1.5 text-[#595E68]">
-            <button
-              onClick={handleZoomOut}
-              className="p-1 rounded-full hover:bg-[#F7F7F9]"
-              title="Zoom out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleResetZoom}
-              className="px-2 py-0.5 rounded text-[11px] font-mono hover:bg-[#F7F7F9]"
-            >
-              {zoom}%
-            </button>
-            <button
-              onClick={handleZoomIn}
-              className="p-1 rounded-full hover:bg-[#F7F7F9]"
-              title="Zoom in"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+        {/* Zoom & Action Controls */}
+        <div className="flex items-center gap-3">
+          {viewMode !== 'latex' && (
+            <div className="flex items-center gap-1 text-[#595E68]">
+              <button
+                onClick={handleZoomOut}
+                className="p-1 rounded-full hover:bg-[#F7F7F9]"
+                title="Zoom out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleResetZoom}
+                className="px-2 py-0.5 rounded text-[11px] font-mono hover:bg-[#F7F7F9]"
+              >
+                {zoom}%
+              </button>
+              <button
+                onClick={handleZoomIn}
+                className="p-1 rounded-full hover:bg-[#F7F7F9]"
+                title="Zoom in"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {activeTab === 'latex' ? (
+          <div className="flex items-center gap-1.5">
             <button
               onClick={handleCopyLatex}
               className="flex items-center gap-1 px-3 py-1 rounded-full border border-[#E2E4E9] bg-white text-[#17191C] font-medium text-xs hover:border-[#7C5CFF]"
+              title="Copy LaTeX source"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied' : 'Copy .tex'}</span>
             </button>
-          ) : (
-            pdfPath && (
+
+            {pdfPath && (
               <a
                 href={pdfPath}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1 text-[#595E68] hover:text-[#7C5CFF]"
+                className="p-1.5 rounded-full border border-[#E2E4E9] bg-white text-[#595E68] hover:text-[#7C5CFF]"
                 title="Open PDF in new tab"
               >
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
-            )
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Main Preview Container */}
-      <div className="flex-1 overflow-hidden p-3 sm:p-4 flex items-center justify-center relative">
+      {/* Main Container */}
+      <div className="flex-1 overflow-hidden p-3 flex gap-3 relative">
         {isCompiling && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-2xs z-20 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="w-6 h-6 text-[#7C5CFF] animate-spin" />
@@ -128,99 +138,66 @@ export function RightPreview({
           </div>
         )}
 
-        {activeTab === 'pdf' ? (
-          pdfPath ? (
-            <div
-              className="bg-white shadow-2xl rounded-xs transition-all duration-150 overflow-hidden border border-[#E2E4E9] flex items-center justify-center"
-              style={{
-                aspectRatio: '1 / 1.4142',
-                maxHeight: 'calc(100vh - 6rem)',
-                maxWidth: '100%',
-                width: `${(100 * zoom) / 100}%`,
-                height: '100%',
-              }}
-            >
-              <iframe
-                src={`${pdfPath}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                className="w-full h-full border-none"
-                title="Compiled PDF Resume"
-              />
+        {/* LaTeX Code View (Visible in 'split' or 'latex' view) */}
+        {(viewMode === 'split' || viewMode === 'latex') && (
+          <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} h-full bg-white text-[#17191C] rounded-2xl p-4 font-mono text-xs overflow-auto border border-[#E2E4E9] shadow-inner flex flex-col`}>
+            <div className="flex items-center justify-between border-b border-[#E2E4E9] pb-2 mb-2 text-[11px] text-[#8A8F9B]">
+              <span className="font-semibold text-[#17191C]">resume.tex (LaTeX Source)</span>
+              <span>{texSource.split('\n').length} lines</span>
             </div>
-          ) : (
-            /* Fallback Sheet */
-            <div
-              className="bg-white text-[#17191C] shadow-2xl p-6 sm:p-8 rounded-xs transition-all border border-[#E2E4E9] overflow-y-auto"
-              style={{
-                aspectRatio: '1 / 1.4142',
-                maxHeight: 'calc(100vh - 6rem)',
-                maxWidth: '100%',
-                height: '100%',
-              }}
-            >
-              <div className="text-center border-b border-[#E2E4E9] pb-4 mb-4">
-                <h1 className="text-2xl font-bold tracking-tight text-[#17191C]">{data.personal.fullName}</h1>
-                <p className="text-sm font-medium text-[#595E68] mb-1">{data.personal.jobTitle}</p>
-                <p className="text-xs text-[#8A8F9B]">
-                  {data.personal.email} • {data.personal.phone} • {data.personal.location}
-                </p>
+            <pre className="flex-1 whitespace-pre-wrap leading-relaxed select-text font-mono">{texSource}</pre>
+          </div>
+        )}
+
+        {/* Compiled PDF View (Visible in 'split' or 'pdf' view) */}
+        {(viewMode === 'split' || viewMode === 'pdf') && (
+          <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} h-full overflow-hidden flex items-center justify-center relative`}>
+            {pdfPath ? (
+              <div
+                className="bg-white shadow-2xl rounded-xs transition-all duration-150 overflow-hidden border border-[#E2E4E9] flex items-center justify-center"
+                style={{
+                  aspectRatio: '1 / 1.4142',
+                  maxHeight: 'calc(100vh - 6.5rem)',
+                  maxWidth: '100%',
+                  width: `${(100 * zoom) / 100}%`,
+                  height: '100%',
+                }}
+              >
+                <iframe
+                  src={`${pdfPath}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                  className="w-full h-full border-none"
+                  title="Compiled PDF Resume"
+                />
               </div>
-
-              {data.summary && (
-                <div className="mb-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#7C5CFF] border-b border-[#E2E4E9] pb-1 mb-2">
-                    Summary
-                  </h3>
-                  <p className="text-xs text-[#595E68] leading-relaxed">{data.summary}</p>
+            ) : (
+              /* Fallback Sheet */
+              <div
+                className="bg-white text-[#17191C] shadow-2xl p-6 sm:p-8 rounded-xs transition-all border border-[#E2E4E9] overflow-y-auto"
+                style={{
+                  aspectRatio: '1 / 1.4142',
+                  maxHeight: 'calc(100vh - 6.5rem)',
+                  maxWidth: '100%',
+                  height: '100%',
+                }}
+              >
+                <div className="text-center border-b border-[#E2E4E9] pb-4 mb-4">
+                  <h1 className="text-2xl font-bold tracking-tight text-[#17191C]">{data?.personal?.fullName}</h1>
+                  <p className="text-sm font-medium text-[#595E68] mb-1">{data?.personal?.jobTitle}</p>
+                  <p className="text-xs text-[#8A8F9B]">
+                    {data?.personal?.email} • {data?.personal?.phone} • {data?.personal?.location}
+                  </p>
                 </div>
-              )}
 
-              {data.experience.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#7C5CFF] border-b border-[#E2E4E9] pb-1 mb-2">
-                    Work Experience
-                  </h3>
-                  <div className="space-y-3">
-                    {data.experience.map((exp) => (
-                      <div key={exp.id}>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold">{exp.position}</span>
-                          <span className="text-[#8A8F9B] font-mono text-[11px]">
-                            {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium text-[#595E68] mb-1">{exp.company}</p>
-                        <ul className="list-disc list-inside text-[11px] text-[#595E68] space-y-0.5">
-                          {exp.highlights.map((h, i) => (
-                            <li key={i}>{h}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
+                {data?.summary && (
+                  <div className="mb-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#7C5CFF] border-b border-[#E2E4E9] pb-1 mb-2">
+                      Summary
+                    </h3>
+                    <p className="text-xs text-[#595E68] leading-relaxed">{data.summary}</p>
                   </div>
-                </div>
-              )}
-
-              {data.skills.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#7C5CFF] border-b border-[#E2E4E9] pb-1 mb-2">
-                    Skills
-                  </h3>
-                  <div className="text-xs space-y-1">
-                    {data.skills.map((s) => (
-                      <p key={s.id}>
-                        <span className="font-semibold">{s.category}: </span>
-                        <span className="text-[#595E68]">{s.items.join(', ')}</span>
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        ) : (
-          /* Light LaTeX Source View */
-          <div className="w-full h-full bg-white text-[#17191C] rounded-2xl p-4 font-mono text-xs overflow-auto border border-[#E2E4E9] shadow-inner">
-            <pre className="whitespace-pre-wrap">{texSource}</pre>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
