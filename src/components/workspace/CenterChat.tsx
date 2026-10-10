@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, AlertCircle, RefreshCw, Bot, User, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Send, Sparkles, AlertCircle, RefreshCw, Bot, User, CheckCircle2, ArrowRight, Briefcase, Upload, X, FileText } from 'lucide-react';
 import { ChatMessage } from '@/lib/types/resume';
 
 interface CenterChatProps {
@@ -20,7 +20,48 @@ export function CenterChat({
   onRetry,
 }: CenterChatProps) {
   const [inputPrompt, setInputPrompt] = useState('');
+  const [showJdModal, setShowJdModal] = useState(false);
+  const [jdText, setJdText] = useState('');
+  const [jdRole, setJdRole] = useState('');
+  const [isReadingJd, setIsReadingJd] = useState(false);
+  const jdFileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const handleJdFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsReadingJd(true);
+    try {
+      if (file.name.endsWith('.txt')) {
+        const text = await file.text();
+        setJdText(text);
+      } else {
+        // Use parse upload route
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/resumes/parse-upload', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (json.extractedText) {
+          setJdText(json.extractedText);
+        } else if (json.data) {
+          setJdText(JSON.stringify(json.data, null, 2));
+        }
+      }
+    } catch (err: any) {
+      console.warn('Failed to parse JD file:', err);
+    } finally {
+      setIsReadingJd(false);
+    }
+  };
+
+  const handleApplyJd = () => {
+    if (!jdText.trim() || isProcessing) return;
+    const instruction = `Tailor my resume specifically for this job description${jdRole ? ` (${jdRole})` : ''}. Align skills, project highlights, and experience bullet points to match these requirements:\n\n${jdText.trim()}`;
+    onSendMessage(instruction);
+    setShowJdModal(false);
+    setJdText('');
+    setJdRole('');
+  };
 
   const defaultSuggestions = [
     'Add my latest internship',
@@ -138,26 +179,28 @@ export function CenterChat({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Suggested Prompts Pill Bar */}
-      {messages.length <= 1 && (
-        <div className="px-4 pb-2">
-          <p className="text-[11px] font-semibold text-[#8A8F9B] uppercase tracking-wider mb-2 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-[#7C5CFF]" /> Suggested Editing Instructions
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {defaultSuggestions.map((sug, i) => (
-              <button
-                key={i}
-                onClick={() => onSendMessage(sug)}
-                disabled={isProcessing}
-                className="text-xs px-3.5 py-1.5 rounded-full border border-[#E2E4E9] bg-white text-[#595E68] hover:border-[#7C5CFF] hover:text-[#7C5CFF] transition-colors shadow-2xs"
-              >
-                {sug}
-              </button>
-            ))}
-          </div>
+      {/* Action / Suggestion Bar */}
+      <div className="px-4 pb-2 pt-1 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setShowJdModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#7C5CFF]/10 text-[#7C5CFF] border border-[#7C5CFF]/30 hover:bg-[#7C5CFF]/20 transition-all shadow-2xs"
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            <span>Tailor with Job Description</span>
+          </button>
+          {defaultSuggestions.slice(0, 3).map((sug, i) => (
+            <button
+              key={i}
+              onClick={() => onSendMessage(sug)}
+              disabled={isProcessing}
+              className="text-xs px-3 py-1 rounded-full border border-[#E2E4E9] bg-white text-[#595E68] hover:border-[#7C5CFF] hover:text-[#7C5CFF] transition-colors shadow-2xs"
+            >
+              {sug}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Input Box */}
       <div className="p-4 border-t border-[#E2E4E9] bg-white">
@@ -182,10 +225,95 @@ export function CenterChat({
         <div className="flex items-center justify-between text-[10px] text-[#8A8F9B] mt-1.5 px-1">
           <span>Press Enter to send, Shift+Enter for newline</span>
           <span className="flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Tectonic Worker Active
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" /> AI Engine Ready (gemini-3.8-flash)
           </span>
         </div>
       </div>
+
+      {/* Job Description Upload / Paste Modal */}
+      {showJdModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E2E4E9] max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setShowJdModal(false)}
+              className="absolute top-4 right-4 text-[#8A8F9B] hover:text-[#17191C] p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 text-[#7C5CFF] flex items-center justify-center">
+                <Briefcase className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#17191C]">Tailor Resume to Job Description</h3>
+                <p className="text-[11px] text-[#595E68]">Upload or paste a target job posting to align skills &amp; keywords</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-xs font-semibold text-[#17191C] block mb-1">Target Job Title (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Senior Frontend Engineer, ML Engineer"
+                  value={jdRole}
+                  onChange={(e) => setJdRole(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#E2E4E9] outline-hidden focus:border-[#7C5CFF]"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-[#17191C]">Job Description Text</label>
+                  <button
+                    type="button"
+                    onClick={() => jdFileInputRef.current?.click()}
+                    disabled={isReadingJd}
+                    className="text-[11px] text-[#7C5CFF] hover:underline flex items-center gap-1 font-medium"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>{isReadingJd ? 'Reading file...' : 'Upload JD (.txt, .pdf)'}</span>
+                  </button>
+                  <input
+                    ref={jdFileInputRef}
+                    type="file"
+                    accept=".txt,.pdf,.docx,.doc"
+                    onChange={handleJdFileUpload}
+                    className="hidden"
+                  />
+                </div>
+                <textarea
+                  rows={6}
+                  placeholder="Paste the full job posting, required qualifications, and key responsibilities here..."
+                  value={jdText}
+                  onChange={(e) => setJdText(e.target.value)}
+                  className="w-full p-3 text-xs rounded-xl border border-[#E2E4E9] outline-hidden focus:border-[#7C5CFF] resize-none font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowJdModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-[#595E68] hover:bg-[#F7F7F9]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyJd}
+                  disabled={!jdText.trim() || isProcessing}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-[#17191C] text-white hover:bg-[#272A30] disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#7C5CFF]" />
+                  <span>Tailor Resume with AI</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

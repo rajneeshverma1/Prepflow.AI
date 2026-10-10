@@ -8,6 +8,8 @@ import { LeftSidebar } from '@/components/workspace/LeftSidebar';
 import { CenterChat } from '@/components/workspace/CenterChat';
 import { RightPreview } from '@/components/workspace/RightPreview';
 import { VersionHistoryModal } from '@/components/workspace/VersionHistoryModal';
+import { DiffReviewBar } from '@/components/workspace/DiffReviewBar';
+import { ResumeDiffItem, applyAcceptedDiffs } from '@/lib/ai/diff';
 import { ResumeData, RevisionMeta, ChatMessage, TemplateId } from '@/lib/types/resume';
 import { MessageSquare, Eye, SlidersHorizontal } from 'lucide-react';
 
@@ -33,6 +35,11 @@ export function EditorClient({ id }: { id: string }) {
 
   // Mobile responsive tab switcher ('chat' vs 'preview' vs 'form')
   const [mobileTab, setMobileTab] = useState<'chat' | 'preview' | 'form'>('chat');
+
+  // Google Docs Gemini-style Diff Suggestion Review states
+  const [pendingDiffs, setPendingDiffs] = useState<ResumeDiffItem[]>([]);
+  const [proposedData, setProposedData] = useState<ResumeData | null>(null);
+  const [isApplyingDiffs, setIsApplyingDiffs] = useState(false);
 
   const fetchResumeDetails = async () => {
     try {
@@ -90,7 +97,6 @@ export function EditorClient({ id }: { id: string }) {
   // Handle AI prompt instruction submission
   const handleSendMessage = async (instruction: string) => {
     setIsAiProcessing(true);
-    setIsCompiling(true);
     setCompilationError(undefined);
 
     try {
@@ -100,7 +106,15 @@ export function EditorClient({ id }: { id: string }) {
         body: JSON.stringify({ instruction }),
       });
       const json = await res.json();
-      if (json.success && json.resume) {
+
+      if (json.success && json.requiresReview) {
+        // Show Google Docs Gemini-style diff suggestions
+        setPendingDiffs(json.diffs || []);
+        setProposedData(json.proposedData);
+        if (json.latestMessage) {
+          setMessages((prev) => [...prev, json.latestMessage]);
+        }
+      } else if (json.success && json.resume) {
         setResumeData(json.resume.data);
         setTemplate(json.resume.template || 'classic');
         setPdfPath(json.resume.pdfPath);
@@ -115,8 +129,49 @@ export function EditorClient({ id }: { id: string }) {
       setCompilationError(err.message || 'AI processing encountered an error.');
     } finally {
       setIsAiProcessing(false);
+    }
+  };
+
+  // Diff Review Handlers (Accept / Reject per line or all at once)
+  const handleAcceptDiffItem = (diffId: string) => {
+    setPendingDiffs((prev) =>
+      prev.map((d) => (d.id === diffId ? { ...d, status: 'accepted' as const } : d))
+    );
+  };
+
+  const handleRejectDiffItem = (diffId: string) => {
+    setPendingDiffs((prev) =>
+      prev.map((d) => (d.id === diffId ? { ...d, status: 'rejected' as const } : d))
+    );
+  };
+
+  const handleApplyDiffs = async (diffsToApply = pendingDiffs) => {
+    if (!resumeData || !proposedData) return;
+    setIsApplyingDiffs(true);
+    setIsCompiling(true);
+    try {
+      const merged = applyAcceptedDiffs(resumeData, proposedData, diffsToApply);
+      await handleDataChange(merged);
+      setPendingDiffs([]);
+      setProposedData(null);
+    } catch (err: any) {
+      setCompilationError(err.message || 'Failed to apply accepted changes.');
+    } finally {
+      setIsApplyingDiffs(false);
       setIsCompiling(false);
     }
+  };
+
+  const handleAcceptAllDiffs = async () => {
+    if (!resumeData || !proposedData) return;
+    const allAccepted = pendingDiffs.map((d) => ({ ...d, status: 'accepted' as const }));
+    setPendingDiffs(allAccepted);
+    await handleApplyDiffs(allAccepted);
+  };
+
+  const handleRejectAllDiffs = () => {
+    setPendingDiffs([]);
+    setProposedData(null);
   };
 
   // Handle Template change
@@ -165,6 +220,7 @@ export function EditorClient({ id }: { id: string }) {
       const json = await res.json();
       if (json.success) {
         setPdfPath(json.pdfPath);
+        if (json.texSource) setTexSource(json.texSource);
       } else {
         setCompilationError(json.error || 'Compilation failed');
       }
@@ -267,6 +323,19 @@ export function EditorClient({ id }: { id: string }) {
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       />
 
+      {/* Google Docs Gemini-style Diff Suggestion Review Bar */}
+      {pendingDiffs.length > 0 && (
+        <DiffReviewBar
+          diffs={pendingDiffs}
+          onAcceptItem={handleAcceptDiffItem}
+          onRejectItem={handleRejectDiffItem}
+          onAcceptAll={handleAcceptAllDiffs}
+          onRejectAll={handleRejectAllDiffs}
+          onApply={() => handleApplyDiffs()}
+          isApplying={isApplyingDiffs}
+        />
+      )}
+
       {/* Main Resizable Workspace Layout (Desktop) */}
       <div className="flex-1 hidden md:flex overflow-hidden relative">
         <Group key={isSidebarOpen ? 'layout-3' : 'layout-2'} orientation="horizontal" className="w-full h-full flex">
@@ -327,6 +396,7 @@ export function EditorClient({ id }: { id: string }) {
               onDownloadPdf={handleDownloadPdf}
               onDownloadTex={handleDownloadTex}
               onTexSourceSave={handleTexSourceSave}
+              onChangeTexSource={setTexSource}
             />
           </Panel>
         </Group>
@@ -360,6 +430,7 @@ export function EditorClient({ id }: { id: string }) {
               onDownloadPdf={handleDownloadPdf}
               onDownloadTex={handleDownloadTex}
               onTexSourceSave={handleTexSourceSave}
+              onChangeTexSource={setTexSource}
             />
           </div>
         )}

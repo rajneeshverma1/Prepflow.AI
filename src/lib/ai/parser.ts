@@ -5,44 +5,115 @@ import { resumeDataSchema } from '../schema/resume';
 import { SAMPLE_FULLSTACK_RESUME } from '../sample/defaultResume';
 
 const PARSE_RESUME_SYSTEM_PROMPT = `You are PromptCV AI — an expert resume parser.
-Your task is to parse raw text extracted from an uploaded resume document (PDF, DOCX, TXT, or Image) into a structured JSON object matching the ResumeData schema.
+Extract all details from the uploaded resume document into a structured JSON object matching this exact schema:
 
-CRITICAL INSTRUCTIONS:
-1. Return ONLY a valid JSON object matching the ResumeData schema.
-2. Extract truth factual details accurately: fullName, jobTitle, email, phone, location, github, linkedin, summary, experience array, education array, projects array, skills array, certifications array.
-3. Template field should be set to "classic" by default unless specified.
-4. Each experience item MUST have: id, company, position, location, startDate, endDate, current, highlights array.
-5. Each education item MUST have: id, institution, degree, fieldOfStudy, startDate, endDate, gpa, highlights.
-6. Each project item MUST have: id, name, description, highlights array, techStack array.
-7. Each skill item MUST have: id, category, items array.
+{
+  "personal": {
+    "fullName": "Candidate Full Name",
+    "jobTitle": "Target or Current Role (e.g. Software Engineer)",
+    "email": "candidate@example.com",
+    "phone": "+1 234 567 890",
+    "location": "City, Country",
+    "github": "https://github.com/...",
+    "linkedin": "https://linkedin.com/in/...",
+    "website": "https://..."
+  },
+  "summary": "Professional summary or bio if present",
+  "education": [
+    {
+      "institution": "University / College",
+      "degree": "Degree (e.g. B.Tech Computer Science)",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "gpa": "CGPA or GPA"
+    }
+  ],
+  "experience": [
+    {
+      "company": "Company Name",
+      "position": "Job Title",
+      "startDate": "Start Date",
+      "endDate": "End Date or Present",
+      "highlights": ["bullet 1", "bullet 2"]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Project Name",
+      "description": "Short description",
+      "highlights": ["bullet 1", "bullet 2"],
+      "techStack": ["React", "Node.js"]
+    }
+  ],
+  "skills": [
+    {
+      "category": "Languages",
+      "items": ["Java", "SQL"]
+    }
+  ],
+  "template": "classic"
+}
+
+CRITICAL RULES:
+1. Return ONLY the JSON object. Do not include markdown or explanations.
+2. Extract the candidate's real name accurately into "personal.fullName".
+3. Extract education, projects, work experience, and skills from the actual document.
+4. Do not return empty placeholder names like "Applicant Name".
 `;
 
-export async function parseResumeContent(rawText: string, fileName?: string): Promise<ResumeData> {
+export async function parseResumeContent(
+  input: string | { buffer: Buffer; mimeType: string; fileName?: string },
+  fileNameParam?: string
+): Promise<ResumeData> {
   const geminiKey = process.env.GEMINI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  // 1. Try Gemini API
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `${PARSE_RESUME_SYSTEM_PROMPT}\n\nUploaded Resume Content:\n${rawText}`,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
+  const isMultimodal = typeof input === 'object' && !!input.buffer;
+  const buffer = isMultimodal ? (input as any).buffer : null;
+  const mimeType = isMultimodal ? (input as any).mimeType : 'application/pdf';
+  const rawText = typeof input === 'string' ? input : '';
+  const fileName = typeof input === 'object' ? (input as any).fileName : fileNameParam;
 
-      const parsed = JSON.parse(cleanJsonString(response.text || ''));
-      const validated = resumeDataSchema.parse(parsed);
-      return validated as ResumeData;
-    } catch (err: any) {
-      console.warn('Gemini resume parsing failed, trying fallback parser:', err?.message);
+  // 1. Try Gemini API (native multimodal PDF & text)
+  if (geminiKey) {
+    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+    for (const model of modelsToTry) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const contents: any[] = [PARSE_RESUME_SYSTEM_PROMPT];
+
+        if (isMultimodal && buffer) {
+          contents.push({
+            inlineData: {
+              data: buffer.toString('base64'),
+              mimeType: mimeType || 'application/pdf',
+            },
+          });
+          contents.push('Extract all sections and data from this uploaded resume document into the required ResumeData JSON schema.');
+        } else {
+          contents.push(`Uploaded Resume Content:\n${rawText}`);
+        }
+
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const rawJson = JSON.parse(cleanJsonString(response.text || ''));
+        const normalized = normalizeParsedResume(rawJson, fileName);
+        const validated = resumeDataSchema.parse(normalized);
+        return validated as ResumeData;
+      } catch (err: any) {
+        console.warn(`Gemini (${model}) resume parsing failed:`, err?.message);
+      }
     }
   }
 
   // 2. Try OpenAI API
-  if (openaiKey) {
+  if (openaiKey && rawText) {
     try {
       const openai = new OpenAI({ apiKey: openaiKey });
       const response = await openai.chat.completions.create({
@@ -74,6 +145,84 @@ function cleanJsonString(str: string): string {
     cleaned = cleaned.replace(/^```/, '').replace(/```$/, '').trim();
   }
   return cleaned;
+}
+
+function normalizeParsedResume(raw: any, fileName?: string): any {
+  if (!raw || typeof raw !== 'object') return raw;
+
+  // 1. Normalize personal info
+  const p = raw.personal || {};
+  const personal = {
+    fullName: p.fullName || p.name || p.candidate_name || raw.fullName || raw.candidate_name || raw.name || (fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Applicant Name'),
+    jobTitle: p.jobTitle || p.role || p.title || raw.jobTitle || 'Software Engineer',
+    email: p.email || raw.email || '',
+    phone: p.phone || raw.phone || '',
+    location: p.location || raw.location || '',
+    github: p.github || raw.github || undefined,
+    linkedin: p.linkedin || raw.linkedin || undefined,
+    website: p.website || p.portfolio || raw.website || undefined,
+  };
+
+  // 2. Normalize education
+  const education = (Array.isArray(raw.education) ? raw.education : []).map((e: any, idx: number) => ({
+    id: e.id || `edu-${idx + 1}`,
+    institution: e.institution || e.university || e.school || 'University',
+    degree: e.degree || 'Degree',
+    fieldOfStudy: e.fieldOfStudy || undefined,
+    location: e.location || undefined,
+    startDate: e.startDate || '',
+    endDate: e.endDate || '',
+    gpa: e.gpa || e.score || undefined,
+    highlights: Array.isArray(e.highlights) ? e.highlights : [],
+  }));
+
+  // 3. Normalize experience
+  const experience = (Array.isArray(raw.experience) ? raw.experience : []).map((exp: any, idx: number) => ({
+    id: exp.id || `exp-${idx + 1}`,
+    company: exp.company || exp.organization || 'Company',
+    position: exp.position || exp.role || exp.title || 'Role',
+    location: exp.location || undefined,
+    startDate: exp.startDate || '',
+    endDate: exp.endDate || '',
+    current: exp.current || exp.endDate?.toLowerCase()?.includes('present') || false,
+    highlights: Array.isArray(exp.highlights) ? exp.highlights : (exp.description ? [exp.description] : []),
+  }));
+
+  // 4. Normalize projects
+  const projects = (Array.isArray(raw.projects) ? raw.projects : []).map((proj: any, idx: number) => ({
+    id: proj.id || `proj-${idx + 1}`,
+    name: proj.name || proj.title || 'Project',
+    description: proj.description || '',
+    highlights: Array.isArray(proj.highlights) ? proj.highlights : [],
+    techStack: Array.isArray(proj.techStack) ? proj.techStack : (Array.isArray(proj.skills) ? proj.skills : []),
+  }));
+
+  // 5. Normalize skills
+  let skills = raw.skills;
+  if (Array.isArray(skills)) {
+    if (skills.length > 0 && typeof skills[0] === 'string') {
+      skills = [{ id: 'sk-1', category: 'Technical Skills', items: skills }];
+    } else {
+      skills = skills.map((s: any, idx: number) => ({
+        id: s.id || `sk-${idx + 1}`,
+        category: s.category || s.name || 'Skills',
+        items: Array.isArray(s.items) ? s.items : (typeof s.items === 'string' ? s.items.split(',').map((x: string) => x.trim()) : []),
+      }));
+    }
+  } else {
+    skills = [];
+  }
+
+  return {
+    personal,
+    summary: raw.summary || '',
+    education,
+    experience,
+    projects,
+    skills,
+    certifications: Array.isArray(raw.certifications) ? raw.certifications : [],
+    template: raw.template || 'classic',
+  };
 }
 
 export function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {

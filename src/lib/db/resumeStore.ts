@@ -258,12 +258,16 @@ export async function updateResumeData(
   id: string,
   updatedData: ResumeData,
   prompt?: string,
-  pdfPath?: string
+  pdfPath?: string,
+  customTexSource?: string
 ) {
   const existing = await getResumeById(id);
   if (!existing) throw new Error(`Resume with ID ${id} not found`);
 
-  const texSource = generateLatexSource(updatedData);
+  // Preserve user custom LaTeX if provided, otherwise fallback to existing or generate
+  const texSource = customTexSource !== undefined 
+    ? customTexSource 
+    : (existing.texSource || generateLatexSource(updatedData));
   const now = new Date().toISOString();
   const nextVersion = (existing.revisions?.length || 0) + 1;
 

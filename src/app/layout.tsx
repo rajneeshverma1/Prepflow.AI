@@ -4,7 +4,16 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 export const metadata: Metadata = {
   title: 'Prepflow.ai — AI-Powered LaTeX Resume Editor',
-  description: 'AI-native resume builder inspired by ChatGPT and Overleaf. Create, edit, and compile professional LaTeX resumes with natural language prompts.',
+  description: 'AI-native resume builder. Create, tailor, and compile professional LaTeX resumes with Gemini AI and job description matching.',
+  icons: {
+    icon: '/favicon.jpg',
+    apple: '/favicon.jpg',
+  },
+  openGraph: {
+    title: 'Prepflow.ai — AI-Powered LaTeX Resume Editor',
+    description: 'Tailor your resume to any job description with Gemini AI. ATS-ready LaTeX PDFs in seconds.',
+    images: ['/favicon.jpg'],
+  },
 };
 
 export default function RootLayout({

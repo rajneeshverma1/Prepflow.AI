@@ -14,10 +14,6 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
     const pdfjsLib = pdfjs.default ?? pdfjs;
 
-    // Disable worker for Node.js server-side usage
-    pdfjsLib.GlobalWorkerOptions = pdfjsLib.GlobalWorkerOptions ?? {};
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-
     const uint8 = new Uint8Array(buffer);
     const loadingTask = pdfjsLib.getDocument({ data: uint8, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true });
     const pdf = await loadingTask.promise;
@@ -47,50 +43,26 @@ export async function POST(req: Request) {
     let extractedText = '';
     let fileName = 'Uploaded Resume';
 
+    let parsedData;
+
     if (file) {
       fileName = file.name;
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      const mimeType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
 
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        // Try pdfjs-dist first (pure JS, no native deps)
-        extractedText = await extractPdfText(buffer);
-
-        // Clean page markers like "-- 1 of 2 --"
-        if (extractedText) {
-          extractedText = extractedText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, ' ').trim();
-        }
-
-        // Fallback: raw binary string extraction if pdfjs found nothing
-        if (!extractedText || extractedText.trim().length < 10) {
-          const rawStr = buffer.toString('binary');
-          const strings = rawStr.match(/[\x20-\x7E\s]{4,}/g) || [];
-          extractedText = strings.join(' ');
-        }
-      } else if (file.type.startsWith('image/')) {
-        extractedText = `Uploaded Resume Image: ${fileName}\nExtract and structure professional resume details for ${fileName.replace(/\.[^/.]+$/, '')}`;
-      } else {
-        // Plain text / docx fallback
-        extractedText = buffer.toString('utf8');
+      try {
+        // Direct native Gemini multimodal parse (understands layout, fonts, columns without OCR bugs)
+        parsedData = await parseResumeContent({ buffer, mimeType, fileName });
+      } catch (parseErr) {
+        console.warn('Native multimodal parsing error, falling back to text extractor:', parseErr);
+        const extractedText = await extractPdfText(buffer).catch(() => '');
+        parsedData = await parseResumeContent(extractedText || `Resume of ${fileName}`, fileName);
       }
     } else if (textPrompt) {
-      extractedText = textPrompt;
-    }
-
-    // Sanitize control characters
-    extractedText = extractedText.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, ' ').trim();
-
-    if (!extractedText || extractedText.length < 5) {
-      extractedText = `Resume Document: ${fileName}\nCandidate Name: ${fileName.replace(/\.[^/.]+$/, '')}\nSoftware Engineer Resume`;
-    }
-
-    // 1. AI Parsing into structured ResumeData JSON
-    let parsedData;
-    try {
-      parsedData = await parseResumeContent(extractedText, fileName);
-    } catch (parseErr) {
-      console.warn('AI Parsing error, using safe fallback parser:', parseErr);
-      parsedData = await parseResumeContent(`Resume of ${fileName}`, fileName);
+      parsedData = await parseResumeContent(textPrompt, fileName);
+    } else {
+      parsedData = await parseResumeContent('Software Engineer Resume', fileName);
     }
 
     // 2. Generate LaTeX Source & Compile PDF (tectonic optional)

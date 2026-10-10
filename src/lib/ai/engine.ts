@@ -28,28 +28,48 @@ export async function editResumeWithAi(
 
   // 1. Try Gemini API if key is present
   if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `${RESUME_AI_SYSTEM_PROMPT}\n\n${promptText}`,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
+    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash'];
+    let lastError: any = null;
 
-      const rawText = response.text || '';
-      const parsedJson = JSON.parse(cleanJsonString(rawText));
-      const validated = resumeDataSchema.parse(parsedJson);
+    for (const model of modelsToTry) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+          model,
+          contents: `${RESUME_AI_SYSTEM_PROMPT}\n\n${promptText}`,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
 
+        const rawText = response.text || '';
+        const parsedJson = JSON.parse(cleanJsonString(rawText));
+        const validated = resumeDataSchema.parse(parsedJson);
+
+        return {
+          success: true,
+          data: validated as ResumeData,
+          explanation: getExplanationForInstruction(userInstruction),
+          suggestedActions: getSuggestedFollowups(userInstruction),
+        };
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Gemini (${model}) failed:`, err?.message || err);
+      }
+    }
+
+    // If key is invalid or suspended, let caller know explicitly
+    const errMsg = lastError?.message || '';
+    if (errMsg.includes('CONSUMER_SUSPENDED') || errMsg.includes('suspended')) {
       return {
-        success: true,
-        data: validated as ResumeData,
-        explanation: getExplanationForInstruction(userInstruction),
-        suggestedActions: getSuggestedFollowups(userInstruction),
+        ...smartRuleBasedEdit(currentData, userInstruction),
+        explanation: `⚠️ **Google Gemini API Key is Suspended**: The GEMINI_API_KEY in your .env was suspended by Google (error 403 CONSUMER_SUSPENDED). Applied rule-based edit instead. Please provide a new key from Google AI Studio.`,
       };
-    } catch (err: any) {
-      console.warn('Gemini API call failed, trying next provider or smart engine:', err?.message);
+    } else if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+      return {
+        ...smartRuleBasedEdit(currentData, userInstruction),
+        explanation: `⚠️ **Invalid Gemini API Key**: Check your GEMINI_API_KEY in .env. Applied rule-based edit instead.`,
+      };
     }
   }
 

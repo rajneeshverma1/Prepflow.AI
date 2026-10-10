@@ -13,6 +13,8 @@ interface RightPreviewProps {
   onDownloadTex: () => void;
   /** Called when user applies manually edited LaTeX */
   onTexSourceSave?: (newSource: string) => void;
+  /** Live change callback */
+  onChangeTexSource?: (newSource: string) => void;
 }
 
 export function RightPreview({
@@ -23,6 +25,7 @@ export function RightPreview({
   onDownloadPdf,
   onDownloadTex,
   onTexSourceSave,
+  onChangeTexSource,
 }: RightPreviewProps) {
   const [zoom, setZoom] = useState(100);
   const [activeTab, setActiveTab] = useState<'pdf' | 'latex'>('pdf');
@@ -42,6 +45,7 @@ export function RightPreview({
 
   const handleApply = () => {
     onTexSourceSave?.(editedTex);
+    setActiveTab('pdf');
   };
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 15, 175));
@@ -274,7 +278,10 @@ export function RightPreview({
             )}
             <textarea
               value={editedTex}
-              onChange={(e) => setEditedTex(e.target.value)}
+              onChange={(e) => {
+                setEditedTex(e.target.value);
+                onChangeTexSource?.(e.target.value);
+              }}
               spellCheck={false}
               className="flex-1 w-full p-4 font-mono text-xs text-[#17191C] bg-white resize-none outline-none leading-relaxed"
               placeholder="Paste or edit your LaTeX source here…"

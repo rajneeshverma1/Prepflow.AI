@@ -18,15 +18,15 @@ export async function POST(
     let texSource: string;
     try {
       const body = await request.json().catch(() => ({}));
-      texSource = (body?.texSource as string) || generateLatexSource(resume.data);
+      texSource = (body?.texSource as string) || resume.texSource || generateLatexSource(resume.data);
     } catch {
-      texSource = generateLatexSource(resume.data);
+      texSource = resume.texSource || generateLatexSource(resume.data);
     }
 
     const compileRes = await compileLatexToPdf(texSource, id);
 
     if (compileRes.success && compileRes.pdfRelativePath) {
-      await updateResumeData(id, resume.data, 'Recompiled PDF', compileRes.pdfRelativePath);
+      await updateResumeData(id, resume.data, 'Recompiled PDF', compileRes.pdfRelativePath, texSource);
     }
 
     return NextResponse.json({

@@ -41,13 +41,13 @@ export async function PUT(
     }
 
     const validatedData = resumeDataSchema.parse(body.data);
-    const texSource = generateLatexSource(validatedData);
+    const texSource = body.texSource || generateLatexSource(validatedData);
     
     // Recompile PDF
     const compileRes = await compileLatexToPdf(texSource, id);
     const pdfPath = compileRes.success ? compileRes.pdfRelativePath : undefined;
 
-    const updated = await updateResumeData(id, validatedData, body.prompt || 'Manual update', pdfPath);
+    const updated = await updateResumeData(id, validatedData, body.prompt || 'Manual update', pdfPath, texSource);
 
     return NextResponse.json({
       success: true,

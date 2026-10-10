@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getResumeById, updateResumeData, addChatMessage } from '@/lib/db/resumeStore';
+import { getResumeById, addChatMessage } from '@/lib/db/resumeStore';
 import { editResumeWithAi } from '@/lib/ai/engine';
-import { generateLatexSource } from '@/lib/latex/renderer';
-import { compileLatexToPdf } from '@/lib/latex/compiler';
+import { computeResumeDiffs } from '@/lib/ai/diff';
 
 export async function POST(
   request: Request,
@@ -22,10 +21,10 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 });
     }
 
-    // 1. Record user's prompt in chat history
+    // 1. Record user prompt in chat
     await addChatMessage(id, { role: 'user', content: instruction });
 
-    // 2. Perform AI structural edit
+    // 2. Perform AI structural edit (Gemini)
     const aiResult = await editResumeWithAi(resume.data, instruction, resume.targetRole || undefined);
 
     if (!aiResult.success || !aiResult.data) {
@@ -38,34 +37,25 @@ export async function POST(
       return NextResponse.json({ success: false, error: errorMessage }, { status: 422 });
     }
 
-    // 3. Render LaTeX & Compile PDF
-    const texSource = generateLatexSource(aiResult.data);
-    const compileRes = await compileLatexToPdf(texSource, id);
+    // 3. Compute granular line-by-line diffs
+    const diffs = computeResumeDiffs(resume.data, aiResult.data);
 
-    // 4. Save revision
-    const updatedResume = await updateResumeData(
-      id,
-      aiResult.data,
-      instruction,
-      compileRes.success ? compileRes.pdfRelativePath : undefined
-    );
-
-    // 5. Record assistant explanation in chat
-    let assistantMessageContent = `${aiResult.explanation}`;
-    if (!compileRes.success) {
-      assistantMessageContent += `\n\n⚠️ *PDF compilation note*: ${compileRes.error}`;
-    }
-
+    // 4. Record assistant message with review prompt
+    const changeCountText = `${diffs.length} suggested change${diffs.length !== 1 ? 's' : ''}`;
     const assistantMsg = await addChatMessage(id, {
       role: 'assistant',
-      content: assistantMessageContent,
+      content: `${aiResult.explanation}\n\n👉 **Review ${changeCountText}**: Accept or reject each change line-by-line or accept all at once.`,
       suggestedActions: aiResult.suggestedActions,
     });
 
     return NextResponse.json({
       success: true,
-      resume: updatedResume,
-      compileResult: compileRes,
+      requiresReview: true,
+      proposedData: aiResult.data,
+      originalData: resume.data,
+      diffs,
+      explanation: aiResult.explanation,
+      suggestedActions: aiResult.suggestedActions,
       latestMessage: assistantMsg,
     });
   } catch (error: any) {
