@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
-import { LeftSidebar } from '@/components/workspace/LeftSidebar';
 import { CenterChat } from '@/components/workspace/CenterChat';
 import { RightPreview } from '@/components/workspace/RightPreview';
-import { VersionHistoryModal } from '@/components/workspace/VersionHistoryModal';
 import { ResumeData, RevisionMeta, ChatMessage, TemplateId } from '@/lib/types/resume';
+import { SAMPLE_FULLSTACK_RESUME } from '@/lib/sample/defaultResume';
+import { generateLatexSource } from '@/lib/latex/renderer';
 import { MessageSquare, Eye } from 'lucide-react';
 
 export default function EditorPage() {
@@ -27,42 +27,73 @@ export default function EditorPage() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [compilationError, setCompilationError] = useState<string | undefined>(undefined);
-  const [isRevisionsOpen, setIsRevisionsOpen] = useState(false);
   
   // Mobile responsive tab switcher ('chat' vs 'preview')
-  const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('chat');
+  const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('preview');
 
-  const fetchResumeDetails = async () => {
+  // Handle Manual Recompile
+  const handleManualCompile = useCallback(async () => {
     if (!id) return;
+    setIsCompiling(true);
+    setCompilationError(undefined);
+    try {
+      const res = await fetch(`/api/resumes/${id}/compile`, { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        setPdfPath(json.pdfPath);
+        setTexSource(json.texSource);
+      } else {
+        setCompilationError(json.error || 'Compilation failed');
+      }
+    } catch (err: any) {
+      setCompilationError(err.message || 'Compilation error');
+    } finally {
+      setIsCompiling(false);
+    }
+  }, [id]);
+
+  // Load resume details from API
+  const fetchResumeDetails = useCallback(async () => {
+    if (!id) {
+      setResumeData(SAMPLE_FULLSTACK_RESUME);
+      setTexSource(generateLatexSource(SAMPLE_FULLSTACK_RESUME));
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/resumes/${id}`);
       const json = await res.json();
       if (json.success && json.resume) {
         const r = json.resume;
         setResumeData(r.data);
-        setTitle(r.title);
+        setTitle(r.title || 'Untitled Resume');
         setTemplate(r.template || 'classic');
         setPdfPath(r.pdfPath);
-        setTexSource(r.texSource || '');
+        setTexSource(r.texSource || generateLatexSource(r.data));
         setRevisions(r.revisions || []);
         setMessages(r.messages || []);
 
         if (!r.pdfPath) {
           handleManualCompile();
         }
+      } else {
+        // Fallback to sample resume if not found so editor still works
+        setResumeData(SAMPLE_FULLSTACK_RESUME);
+        setTexSource(generateLatexSource(SAMPLE_FULLSTACK_RESUME));
       }
     } catch (err) {
       console.error('Failed to load resume details:', err);
+      setResumeData(SAMPLE_FULLSTACK_RESUME);
+      setTexSource(generateLatexSource(SAMPLE_FULLSTACK_RESUME));
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, handleManualCompile]);
 
   useEffect(() => {
-    if (id) {
-      fetchResumeDetails();
-    }
-  }, [id]);
+    fetchResumeDetails();
+  }, [fetchResumeDetails]);
 
   // Handle manual structured form edit
   const handleDataChange = async (updatedData: ResumeData) => {
@@ -79,7 +110,7 @@ export default function EditorPage() {
       const json = await res.json();
       if (json.success && json.resume) {
         setPdfPath(json.resume.pdfPath);
-        setTexSource(json.resume.texSource || '');
+        setTexSource(json.resume.texSource || generateLatexSource(updatedData));
         setRevisions(json.resume.revisions || []);
       }
       if (json.compileResult && !json.compileResult.success) {
@@ -109,7 +140,7 @@ export default function EditorPage() {
         setResumeData(json.resume.data);
         setTemplate(json.resume.template || 'classic');
         setPdfPath(json.resume.pdfPath);
-        setTexSource(json.resume.texSource || '');
+        setTexSource(json.resume.texSource || generateLatexSource(json.resume.data));
         setRevisions(json.resume.revisions || []);
         setMessages(json.resume.messages || []);
       } else if (json.error) {
@@ -132,26 +163,6 @@ export default function EditorPage() {
     handleDataChange(updated);
   };
 
-  // Handle Manual Recompile
-  const handleManualCompile = async () => {
-    setIsCompiling(true);
-    setCompilationError(undefined);
-    try {
-      const res = await fetch(`/api/resumes/${id}/compile`, { method: 'POST' });
-      const json = await res.json();
-      if (json.success) {
-        setPdfPath(json.pdfPath);
-        setTexSource(json.texSource);
-      } else {
-        setCompilationError(json.error || 'Compilation failed');
-      }
-    } catch (err: any) {
-      setCompilationError(err.message || 'Compilation error');
-    } finally {
-      setIsCompiling(false);
-    }
-  };
-
   // Handle File Upload from Chat Prompt
   const handleUploadFile = async (file: File) => {
     setIsAiProcessing(true);
@@ -169,8 +180,13 @@ export default function EditorPage() {
 
       const json = await res.json();
       if (json.success && json.resume) {
-        handleDataChange(json.resume.data);
-        handleSendMessage(`Uploaded and parsed new resume file: ${file.name}`);
+        setResumeData(json.resume.data);
+        setTitle(json.resume.title || file.name);
+        setTemplate(json.resume.template || 'classic');
+        setPdfPath(json.resume.pdfPath);
+        setTexSource(json.resume.texSource || generateLatexSource(json.resume.data));
+        setRevisions(json.resume.revisions || []);
+        setMessages(json.resume.messages || []);
       } else {
         setCompilationError(json.error || 'Failed to parse uploaded resume.');
       }
@@ -192,7 +208,7 @@ export default function EditorPage() {
   };
 
   const handleDownloadTex = () => {
-    const blob = new Blob([texSource], { type: 'text/x-tex' });
+    const blob = new Blob([texSource || generateLatexSource(resumeData || SAMPLE_FULLSTACK_RESUME)], { type: 'text/x-tex' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -232,7 +248,7 @@ export default function EditorPage() {
         <div className={`w-full md:w-[65%] lg:w-[70%] flex flex-col ${mobileTab === 'preview' ? 'block' : 'hidden md:flex'}`}>
           <RightPreview
             pdfPath={pdfPath}
-            texSource={texSource}
+            texSource={texSource || generateLatexSource(resumeData)}
             data={resumeData}
             isCompiling={isCompiling}
             onDownloadPdf={handleDownloadPdf}

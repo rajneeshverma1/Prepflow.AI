@@ -170,7 +170,7 @@ export function RightPreview({
                 />
               </div>
             ) : (
-              /* Fallback Sheet */
+              /* High-fidelity A4 Fallback Sheet */
               <div
                 className="bg-white text-[#17191C] shadow-2xl p-6 sm:p-8 rounded-xs transition-all border border-[#E2E4E9] overflow-y-auto"
                 style={{
@@ -178,22 +178,95 @@ export function RightPreview({
                   maxHeight: 'calc(100vh - 6.5rem)',
                   maxWidth: '100%',
                   height: '100%',
+                  fontFamily: 'Georgia, serif',
                 }}
               >
-                <div className="text-center border-b border-[#E2E4E9] pb-4 mb-4">
-                  <h1 className="text-2xl font-bold tracking-tight text-[#17191C]">{data?.personal?.fullName}</h1>
-                  <p className="text-sm font-medium text-[#595E68] mb-1">{data?.personal?.jobTitle}</p>
-                  <p className="text-xs text-[#8A8F9B]">
-                    {data?.personal?.email} • {data?.personal?.phone} • {data?.personal?.location}
+                {/* Header */}
+                <div className="text-center border-b-2 border-[#17191C] pb-2 mb-3">
+                  <h1 className="text-2xl font-bold tracking-tight uppercase text-[#17191C]">
+                    {data?.personal?.fullName || 'Candidate Name'}
+                  </h1>
+                  <p className="text-xs text-[#595E68] mt-1 font-sans">
+                    {[
+                      data?.personal?.email,
+                      data?.personal?.phone,
+                      data?.personal?.location,
+                      data?.personal?.linkedin ? 'LinkedIn' : undefined,
+                      data?.personal?.github ? 'GitHub' : undefined,
+                    ].filter(Boolean).join(' | ')}
                   </p>
                 </div>
 
+                {/* Summary */}
                 {data?.summary && (
-                  <div className="mb-4">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#7C5CFF] border-b border-[#E2E4E9] pb-1 mb-2">
-                      Summary
-                    </h3>
-                    <p className="text-xs text-[#595E68] leading-relaxed">{data.summary}</p>
+                  <div className="mb-3">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#17191C] border-b border-gray-300 pb-0.5 mb-1 font-sans">
+                      Professional Summary
+                    </h2>
+                    <p className="text-[11px] text-[#2D3139] leading-relaxed font-sans">{data.summary}</p>
+                  </div>
+                )}
+
+                {/* Experience */}
+                {data?.experience && data.experience.length > 0 && (
+                  <div className="mb-3">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#17191C] border-b border-gray-300 pb-0.5 mb-1.5 font-sans">
+                      Work Experience
+                    </h2>
+                    <div className="space-y-2">
+                      {data.experience.map((exp, idx) => (
+                        <div key={exp.id || idx} className="text-[11px]">
+                          <div className="flex justify-between font-bold text-[#17191C]">
+                            <span>{exp.position} — {exp.company}</span>
+                            <span className="font-normal text-[#595E68] font-sans">{exp.startDate} – {exp.endDate || 'Present'}</span>
+                          </div>
+                          {exp.highlights && exp.highlights.length > 0 && (
+                            <ul className="list-disc list-inside mt-0.5 text-[#374151] space-y-0.5 font-sans">
+                              {exp.highlights.map((h, hIdx) => (
+                                <li key={hIdx} className="leading-snug">{h}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Education */}
+                {data?.education && data.education.length > 0 && (
+                  <div className="mb-3">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#17191C] border-b border-gray-300 pb-0.5 mb-1.5 font-sans">
+                      Education
+                    </h2>
+                    <div className="space-y-1.5">
+                      {data.education.map((edu, idx) => (
+                        <div key={edu.id || idx} className="text-[11px]">
+                          <div className="flex justify-between font-bold text-[#17191C]">
+                            <span>{edu.institution}</span>
+                            <span className="font-normal text-[#595E68] font-sans">{edu.startDate} – {edu.endDate}</span>
+                          </div>
+                          <div className="text-[#4B5563] italic">{edu.degree}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Skills */}
+                {data?.skills && data.skills.length > 0 && (
+                  <div className="mb-2">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#17191C] border-b border-gray-300 pb-0.5 mb-1 font-sans">
+                      Technical Skills
+                    </h2>
+                    <div className="space-y-0.5 text-[11px] font-sans">
+                      {data.skills.map((sk, idx) => (
+                        <div key={sk.id || idx}>
+                          <span className="font-semibold text-[#17191C]">{sk.category}: </span>
+                          <span className="text-[#374151]">{sk.items.join(', ')}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

@@ -20,6 +20,18 @@ export async function GET(
       resume.texSource = generateLatexSource(resume.data);
     }
 
+    if (!resume.pdfPath) {
+      try {
+        const compileRes = await compileLatexToPdf(resume.texSource, resume.id);
+        if (compileRes.success && compileRes.pdfRelativePath) {
+          resume.pdfPath = compileRes.pdfRelativePath;
+          await updateResumeData(resume.id, resume.data, 'Compiled on initial load', compileRes.pdfRelativePath);
+        }
+      } catch (compErr) {
+        console.warn('Auto compile on fetch failed:', compErr);
+      }
+    }
+
     return NextResponse.json({ success: true, resume });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
