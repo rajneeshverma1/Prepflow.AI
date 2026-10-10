@@ -36,7 +36,7 @@ export function RightPreview({
   const handleResetZoom = () => setZoom(100);
 
   return (
-    <aside className="w-[48%] h-[calc(100vh-3.5rem)] border-l border-[#E2E4E9] bg-[#F7F7F9] flex flex-col shrink-0">
+    <section className="flex-1 h-[calc(100vh-3.5rem)] bg-[#F7F7F9] flex flex-col min-w-0 border-r border-[#E2E4E9]">
       {/* Top preview toolbar */}
       <div className="h-11 border-b border-[#E2E4E9] bg-white px-4 flex items-center justify-between text-xs">
         {/* Toggle PDF vs LaTeX View */}
@@ -131,10 +131,13 @@ export function RightPreview({
         {activeTab === 'pdf' ? (
           pdfPath ? (
             <div
-              className="bg-white shadow-2xl rounded-xs transition-all duration-150 origin-top overflow-hidden border border-[#E2E4E9]"
+              className="bg-white shadow-2xl rounded-xs transition-all duration-150 origin-top overflow-hidden border border-[#E2E4E9] my-2"
               style={{
-                width: `${(8.5 * 96 * zoom) / 100}px`,
-                height: `${(11 * 96 * zoom) / 100}px`,
+                width: `${(8.5 * 105 * zoom) / 100}%`,
+                maxWidth: '850px',
+                minWidth: '320px',
+                height: `${(11 * 105 * zoom) / 100}vh`,
+                minHeight: '850px',
               }}
             >
               <iframe
@@ -219,6 +222,6 @@ export function RightPreview({
           </div>
         )}
       </div>
-    </aside>
+    </section>
   );
 }

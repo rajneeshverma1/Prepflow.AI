@@ -60,6 +60,19 @@ export function CenterChat({
 
   return (
     <div className="flex-1 h-[calc(100vh-3.5rem)] flex flex-col bg-[#F7F7F9]">
+      {/* Top Section Header */}
+      <div className="h-11 border-b border-[#E2E4E9] bg-white px-4 flex items-center justify-between text-xs shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md glow-purple flex items-center justify-center text-white">
+            <Sparkles className="w-3 h-3" />
+          </div>
+          <span className="font-bold text-[#17191C]">AI Prompt Assistant</span>
+        </div>
+        <span className="text-[11px] font-semibold text-[#7C5CFF] bg-[#7C5CFF]/10 px-2.5 py-0.5 rounded-full border border-[#7C5CFF]/20">
+          Prompt & Upload PDF
+        </span>
+      </div>
+
       {/* Top Error Notice */}
       {compilationError && (
         <div className="bg-amber-50 border-b border-amber-200 p-3 px-4 flex items-center justify-between text-xs text-amber-900">

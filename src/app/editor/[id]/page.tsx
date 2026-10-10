@@ -218,22 +218,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         onManualCompile={handleManualCompile}
       />
 
-      {/* Main Clean 2-Panel Layout */}
+      {/* Main Workspace Layout */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Panel: AI Chat Interface & File Upload */}
-        <div className={`w-full md:w-[50%] flex flex-col ${mobileTab === 'chat' ? 'block' : 'hidden md:flex'}`}>
-          <CenterChat
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            onUploadFile={handleUploadFile}
-            isProcessing={isAiProcessing}
-            compilationError={compilationError}
-            onRetry={handleManualCompile}
-          />
-        </div>
-
-        {/* Right Panel: Real Compiled PDF Preview & LaTeX Source */}
-        <div className={`w-full md:w-[50%] ${mobileTab === 'preview' ? 'block' : 'hidden md:block'}`}>
+        {/* Main Canvas (Left/Center): LaTeX Source & Large PDF Resume Preview */}
+        <div className={`w-full md:w-[65%] lg:w-[70%] flex flex-col ${mobileTab === 'preview' ? 'block' : 'hidden md:flex'}`}>
           <RightPreview
             pdfPath={pdfPath}
             texSource={texSource}
@@ -241,6 +229,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             isCompiling={isCompiling}
             onDownloadPdf={handleDownloadPdf}
             onDownloadTex={handleDownloadTex}
+          />
+        </div>
+
+        {/* Side Panel (Right): AI Prompting Section & PDF Upload */}
+        <div className={`w-full md:w-[35%] lg:w-[30%] flex flex-col ${mobileTab === 'chat' ? 'block' : 'hidden md:flex'}`}>
+          <CenterChat
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            onUploadFile={handleUploadFile}
+            isProcessing={isAiProcessing}
+            compilationError={compilationError}
+            onRetry={handleManualCompile}
           />
         </div>
       </div>
