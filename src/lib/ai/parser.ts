@@ -18,26 +18,29 @@ CRITICAL INSTRUCTIONS:
 `;
 
 export async function parseResumeContent(rawText: string, fileName?: string): Promise<ResumeData> {
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
   // 1. Try Gemini API
   if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `${PARSE_RESUME_SYSTEM_PROMPT}\n\nUploaded Resume Content:\n${rawText}`,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    for (const model of modelsToTry) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+          model,
+          contents: `${PARSE_RESUME_SYSTEM_PROMPT}\n\nUploaded Resume Content:\n${rawText}`,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
 
-      const parsed = JSON.parse(cleanJsonString(response.text || ''));
-      const validated = resumeDataSchema.parse(parsed);
-      return validated as ResumeData;
-    } catch (err: any) {
-      console.warn('Gemini resume parsing failed, trying OpenAI or smart fallback:', err?.message);
+        const parsed = JSON.parse(cleanJsonString(response.text || ''));
+        const validated = resumeDataSchema.parse(parsed);
+        return validated as ResumeData;
+      } catch (err: any) {
+        console.warn(`Gemini (${model}) resume parsing attempt:`, err?.message || err);
+      }
     }
   }
 
