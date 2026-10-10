@@ -30,7 +30,7 @@ export default function DashboardPage() {
 
       const json = await res.json();
       if (json.success && json.resumeId) {
-        router.push(`/editor/${json.resumeId}`);
+        window.location.href = `/editor/${json.resumeId}`;
       } else {
         setUploadError(json.error || 'Failed to parse resume.');
       }

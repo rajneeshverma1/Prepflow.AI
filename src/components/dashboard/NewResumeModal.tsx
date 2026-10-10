@@ -66,7 +66,7 @@ export function NewResumeModal({ isOpen, onClose }: NewResumeModalProps) {
       const json = await res.json();
       if (json.success && json.resumeId) {
         onClose();
-        router.push(`/editor/${json.resumeId}`);
+        window.location.href = `/editor/${json.resumeId}`;
       } else {
         setErrorMessage(json.error || 'Failed to parse uploaded resume.');
       }

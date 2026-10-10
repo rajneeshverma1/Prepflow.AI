@@ -44,6 +44,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         setTexSource(r.texSource || '');
         setRevisions(r.revisions || []);
         setMessages(r.messages || []);
+
+        if (!r.pdfPath) {
+          handleManualCompile();
+        }
       }
     } catch (err) {
       console.error('Failed to load resume details:', err);

@@ -93,14 +93,15 @@ export async function POST(req: Request) {
 
     const compileRes = await compileLatexToPdf(texSource, created.id);
 
+    let finalResume: any = created;
     if (compileRes.success && compileRes.pdfRelativePath) {
-      await updateResumeData(created.id, parsedData, `Uploaded ${fileName}`, compileRes.pdfRelativePath);
+      finalResume = await updateResumeData(created.id, parsedData, `Uploaded ${fileName}`, compileRes.pdfRelativePath);
     }
 
     return NextResponse.json({
       success: true,
       resumeId: created.id,
-      resume: created,
+      resume: finalResume,
       compileResult: compileRes,
     });
   } catch (err: any) {
