@@ -455,8 +455,8 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
       const parts = lineWithoutDate.split(/[|•·,–-]/).map((s) => s.trim()).filter(Boolean);
 
       const nextLine = expLines[i + 1] && !expLines[i + 1].startsWith('•') && !expLines[i + 1].startsWith('-') ? expLines[i + 1] : '';
-      let comp = parts[0] || 'Organization';
-      let pos = parts[1] || (nextLine ? nextLine : 'Software Engineer');
+      const comp = parts[0] || 'Organization';
+      const pos = parts[1] || (nextLine ? nextLine : 'Software Engineer');
 
       if (nextLine && !parts[1]) {
         i++; // consumed nextLine

@@ -130,14 +130,14 @@ function smartRuleBasedEdit(currentData: ResumeData, instruction: string): AiEdi
   const lower = instruction.toLowerCase();
 
   let explanation = 'Updated resume based on your instruction.';
-  let suggestedActions: string[] = ['Shorten to 1 page', 'Switch template to Modern', 'Add impact metrics'];
+  const suggestedActions: string[] = ['Shorten to 1 page', 'Switch template to Modern', 'Add impact metrics'];
 
   // Name change
   if (lower.includes('change my name') || lower.includes('rename') || lower.includes('my name is') || lower.includes('name to')) {
     const match = instruction.match(/(?:name to|name is|rename to)\s+([A-Za-z\s]+)/i);
     if (match) {
-      data.personal.name = match[1].trim();
-      explanation = `Updated your name to "${data.personal.name}".`;
+      data.personal.fullName = match[1].trim();
+      explanation = `Updated your name to "${data.personal.fullName}".`;
       return { success: true, data: resumeDataSchema.parse(data) as ResumeData, explanation, suggestedActions };
     }
   }

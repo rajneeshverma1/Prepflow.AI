@@ -19,13 +19,14 @@ export function computeResumeDiffs(original: ResumeData, proposed: ResumeData): 
 
   // 1. Personal fields
   const personalFields: Array<{ key: keyof typeof original.personal; label: string }> = [
-    { key: 'name', label: 'Full Name' },
+    { key: 'fullName', label: 'Full Name' },
     { key: 'jobTitle', label: 'Job Title' },
     { key: 'email', label: 'Email' },
     { key: 'phone', label: 'Phone' },
     { key: 'location', label: 'Location' },
     { key: 'linkedin', label: 'LinkedIn' },
-    { key: 'website', label: 'Website / GitHub' },
+    { key: 'github', label: 'GitHub' },
+    { key: 'website', label: 'Website' },
   ];
   for (const { key, label } of personalFields) {
     const origVal = String(original.personal[key] || '');

@@ -79,7 +79,7 @@ export function VersionHistoryModal({
 
                 <p className="text-xs text-zinc-700 dark:text-zinc-300 mb-2 flex items-start gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#7C5CFF] shrink-0 mt-0.5" />
-                  <span>Prompt: "{rev.prompt || 'Manual Edit'}"</span>
+                  <span>Prompt: &quot;{rev.prompt || 'Manual Edit'}&quot;</span>
                 </p>
 
                 {!isCurrent && (
