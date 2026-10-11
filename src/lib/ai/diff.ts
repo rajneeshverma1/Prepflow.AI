@@ -17,18 +17,31 @@ export interface ResumeDiffItem {
 export function computeResumeDiffs(original: ResumeData, proposed: ResumeData): ResumeDiffItem[] {
   const diffs: ResumeDiffItem[] = [];
 
-  // 1. Personal job title
-  if (original.personal.jobTitle !== proposed.personal.jobTitle && proposed.personal.jobTitle) {
-    diffs.push({
-      id: 'personal-jobTitle',
-      section: 'personal',
-      type: 'modify',
-      title: 'Job Title',
-      oldValue: original.personal.jobTitle,
-      newValue: proposed.personal.jobTitle,
-      status: 'pending',
-      path: 'personal.jobTitle',
-    });
+  // 1. Personal fields
+  const personalFields: Array<{ key: keyof typeof original.personal; label: string }> = [
+    { key: 'name', label: 'Full Name' },
+    { key: 'jobTitle', label: 'Job Title' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'location', label: 'Location' },
+    { key: 'linkedin', label: 'LinkedIn' },
+    { key: 'website', label: 'Website / GitHub' },
+  ];
+  for (const { key, label } of personalFields) {
+    const origVal = String(original.personal[key] || '');
+    const propVal = String(proposed.personal[key] || '');
+    if (origVal !== propVal && propVal) {
+      diffs.push({
+        id: `personal-${key}`,
+        section: 'personal',
+        type: origVal ? 'modify' : 'add',
+        title: label,
+        oldValue: origVal || '(empty)',
+        newValue: propVal,
+        status: 'pending',
+        path: `personal.${key}`,
+      });
+    }
   }
 
   // 2. Summary
@@ -206,9 +219,10 @@ export function applyAcceptedDiffs(
     if (parts.length === 1 && parts[0] === 'summary') {
       result.summary = diff.newValue;
     }
-    // e.g. path = "personal.jobTitle"
-    else if (parts[0] === 'personal' && parts[1] === 'jobTitle') {
-      result.personal.jobTitle = diff.newValue;
+    // e.g. path = "personal.name", "personal.jobTitle", "personal.email", etc.
+    else if (parts[0] === 'personal' && parts.length === 2) {
+      const field = parts[1] as keyof ResumeData['personal'];
+      (result.personal as any)[field] = diff.newValue;
     }
     // e.g. path = "experience.0.highlights.1"
     else if (parts[0] === 'experience' && parts[2] === 'highlights') {

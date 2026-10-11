@@ -40,14 +40,19 @@ export async function PUT(
       return NextResponse.json({ success: true, resume: duplicated });
     }
 
-    const validatedData = resumeDataSchema.parse(body.data);
-    const texSource = body.texSource || generateLatexSource(validatedData);
+    const existing = await (await import('@/lib/db/resumeStore')).getResumeById(id);
+    // Preserve record-level template; only switch if explicitly provided in body
+    const effectiveTemplate = body.template || validatedData.template || existing?.template || 'classic';
+    const dataWithTemplate = { ...validatedData, template: effectiveTemplate as any };
+
+    const texSource = body.texSource || generateLatexSource(dataWithTemplate);
     
     // Recompile PDF
     const compileRes = await compileLatexToPdf(texSource, id);
     const pdfPath = compileRes.success ? compileRes.pdfRelativePath : undefined;
 
-    const updated = await updateResumeData(id, validatedData, body.prompt || 'Manual update', pdfPath, texSource);
+    const updated = await updateResumeData(id, dataWithTemplate, body.prompt || 'Manual update', pdfPath, texSource);
+
 
     return NextResponse.json({
       success: true,

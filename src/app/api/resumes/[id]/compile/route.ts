@@ -26,7 +26,9 @@ export async function POST(
     const compileRes = await compileLatexToPdf(texSource, id);
 
     if (compileRes.success && compileRes.pdfRelativePath) {
-      await updateResumeData(id, resume.data, 'Recompiled PDF', compileRes.pdfRelativePath, texSource);
+      // Preserve the top-level template — never overwrite it with schema default
+      const dataToSave = { ...resume.data, template: (resume.template as any) || resume.data.template };
+      await updateResumeData(id, dataToSave, 'Recompiled PDF', compileRes.pdfRelativePath, texSource);
     }
 
     return NextResponse.json({

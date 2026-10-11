@@ -125,6 +125,16 @@ function smartRuleBasedEdit(currentData: ResumeData, instruction: string): AiEdi
   let explanation = 'Updated resume based on your instruction.';
   let suggestedActions: string[] = ['Shorten to 1 page', 'Switch template to Modern', 'Add impact metrics'];
 
+  // Name change
+  if (lower.includes('change my name') || lower.includes('rename') || lower.includes('my name is') || lower.includes('name to')) {
+    const match = instruction.match(/(?:name to|name is|rename to)\s+([A-Za-z\s]+)/i);
+    if (match) {
+      data.personal.name = match[1].trim();
+      explanation = `Updated your name to "${data.personal.name}".`;
+      return { success: true, data: resumeDataSchema.parse(data) as ResumeData, explanation, suggestedActions };
+    }
+  }
+
   // Template switching
   if (lower.includes('modern') || lower.includes('switch to modern')) {
     data.template = 'modern';
