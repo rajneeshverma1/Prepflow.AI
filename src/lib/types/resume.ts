@@ -73,6 +73,9 @@ export interface ResumeData {
   certifications: Certification[];
   customSections?: CustomSection[];
   template: TemplateId;
+  isUploadedPdf?: boolean;
+  originalFileName?: string;
+  originalPdfPath?: string;
 }
 
 export interface RevisionMeta {
@@ -82,6 +85,8 @@ export interface RevisionMeta {
   createdAt: string;
   data: ResumeData;
   texSource?: string;
+  originalPdfPath?: string;
+  pdfPath?: string;
 }
 
 export interface ChatMessage {

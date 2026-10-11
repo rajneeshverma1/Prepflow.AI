@@ -23,15 +23,22 @@ export async function editResumeWithAi(
   const currentJsonStr = JSON.stringify(currentData, null, 2);
   const promptText = buildUserPrompt(currentJsonStr, userInstruction, targetRole);
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
   // 1. Try Gemini API if key is present
   if (geminiKey) {
-    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash'];
+    const candidateModels = [
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-3.5-flash',
+      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+      'gemini-flash-latest',
+    ];
     let lastError: any = null;
 
-    for (const model of modelsToTry) {
+    for (const model of candidateModels) {
       try {
         const ai = new GoogleGenAI({ apiKey: geminiKey });
         const response = await ai.models.generateContent({
@@ -54,7 +61,7 @@ export async function editResumeWithAi(
         };
       } catch (err: any) {
         lastError = err;
-        console.warn(`Gemini (${model}) failed:`, err?.message || err);
+        console.warn(`Gemini (${model}) failed, trying next:`, err?.message || err);
       }
     }
 

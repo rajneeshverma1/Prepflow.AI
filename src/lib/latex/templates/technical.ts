@@ -110,6 +110,20 @@ ${educationItems}
 `
     : '';
 
+  const customBlocks = (data.customSections || [])
+    .map((sec) => {
+      if (!sec.title || !sec.items || sec.items.length === 0) return '';
+      const items = sec.items.map((item) => `    \\item ${esc(item)}`).join('\n');
+      return `
+\\section*{${esc(sec.title.toUpperCase())}}
+\\begin{itemize}[leftmargin=1.5em, noitemsep, topsep=2pt]
+${items}
+\\end{itemize}
+\\vspace{4pt}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
   return `\\documentclass[10pt, letterpaper]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[margin=0.5in]{geometry}
@@ -142,6 +156,7 @@ ${skillsBlock}
 ${experienceBlock}
 ${projectsBlock}
 ${educationBlock}
+${customBlocks}
 
 \\end{document}
 `;

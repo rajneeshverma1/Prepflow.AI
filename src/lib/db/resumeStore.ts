@@ -5,19 +5,31 @@ import { BLANK_RESUME_DATA, BLANK_MINIMAL_LATEX_TEMPLATE } from '../sample/blank
 import { generateLatexSource } from '../latex/renderer';
 
 // In-memory fallback cache for instant local dev responsiveness when database is connecting/configuring
-const memoryResumes: Map<string, {
+export type StoredResume = {
   id: string;
   title: string;
   targetRole?: string;
   template: string;
   data: ResumeData;
   pdfPath?: string;
+  originalPdfPath?: string;
   texSource?: string;
   createdAt: string;
   updatedAt: string;
   revisions: RevisionMeta[];
   messages: ChatMessage[];
-}> = new Map();
+};
+
+const globalForResumes = globalThis as unknown as {
+  memoryResumes: Map<string, StoredResume> | undefined;
+};
+
+const memoryResumes: Map<string, StoredResume> =
+  globalForResumes.memoryResumes ?? new Map();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForResumes.memoryResumes = memoryResumes;
+}
 
 // Populate memory store with starter sample resumes if empty
 function initializeSampleMemoryStore() {
@@ -135,13 +147,15 @@ export async function getResumeById(id: string) {
         },
       });
       if (resume) {
+        const parsedData = JSON.parse(resume.data) as ResumeData;
         return {
           id: resume.id,
           title: resume.title,
           targetRole: resume.targetRole || undefined,
           template: resume.template,
-          data: JSON.parse(resume.data) as ResumeData,
+          data: parsedData,
           pdfPath: resume.pdfPath || undefined,
+          originalPdfPath: (resume as any).originalPdfPath || parsedData.originalPdfPath || undefined,
           texSource: resume.texSource || undefined,
           createdAt: resume.createdAt.toISOString(),
           updatedAt: resume.updatedAt.toISOString(),
@@ -152,6 +166,8 @@ export async function getResumeById(id: string) {
             createdAt: rev.createdAt.toISOString(),
             data: JSON.parse(rev.data) as ResumeData,
             texSource: rev.texSource || undefined,
+            pdfPath: rev.pdfPath || undefined,
+            originalPdfPath: (rev as any).originalPdfPath || undefined,
           })),
           messages: resume.messages.map((m) => ({
             id: m.id,
@@ -166,7 +182,14 @@ export async function getResumeById(id: string) {
     console.warn('Prisma query failed, checking memory store:', err);
   }
 
-  return memoryResumes.get(id) || null;
+  const inMemory = memoryResumes.get(id);
+  if (inMemory) {
+    if (!inMemory.originalPdfPath && inMemory.data?.originalPdfPath) {
+      inMemory.originalPdfPath = inMemory.data.originalPdfPath;
+    }
+    return inMemory;
+  }
+  return null;
 }
 
 export async function createResume(params: {
@@ -175,11 +198,15 @@ export async function createResume(params: {
   template?: string;
   initialData?: ResumeData;
   texSource?: string;
+  originalPdfPath?: string;
+  pdfPath?: string;
 }) {
   const id = `resume-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const isBlank = params.template === 'blank' || params.title?.toLowerCase().includes('blank');
   const data = params.initialData || (isBlank ? BLANK_RESUME_DATA : { ...SAMPLE_FULLSTACK_RESUME, template: (params.template as any) || 'classic' });
   const texSource = params.texSource || (isBlank ? BLANK_MINIMAL_LATEX_TEMPLATE : generateLatexSource(data));
+  const originalPdfPath = params.originalPdfPath || data.originalPdfPath || undefined;
+  const pdfPath = params.pdfPath || undefined;
   const now = new Date().toISOString();
 
   const newResume = {
@@ -189,17 +216,20 @@ export async function createResume(params: {
     template: data.template || 'classic',
     data,
     texSource,
-    pdfPath: undefined,
+    pdfPath,
+    originalPdfPath,
     createdAt: now,
     updatedAt: now,
     revisions: [
       {
         id: `rev-${Date.now()}`,
         version: 1,
-        prompt: 'Initial creation',
+        prompt: originalPdfPath ? 'Uploaded original PDF resume' : 'Initial creation',
         createdAt: now,
         data,
         texSource,
+        pdfPath,
+        originalPdfPath,
       },
     ],
     messages: [
@@ -227,6 +257,7 @@ export async function createResume(params: {
           template: newResume.template,
           data: JSON.stringify(newResume.data),
           texSource: newResume.texSource,
+          pdfPath: newResume.pdfPath,
           revisions: {
             create: {
               id: newResume.revisions[0].id,
@@ -234,6 +265,7 @@ export async function createResume(params: {
               prompt: newResume.revisions[0].prompt,
               data: JSON.stringify(newResume.data),
               texSource: newResume.texSource,
+              pdfPath: newResume.pdfPath,
             },
           },
           messages: {
@@ -259,7 +291,8 @@ export async function updateResumeData(
   updatedData: ResumeData,
   prompt?: string,
   pdfPath?: string,
-  customTexSource?: string
+  customTexSource?: string,
+  originalPdfPath?: string
 ) {
   const existing = await getResumeById(id);
   if (!existing) throw new Error(`Resume with ID ${id} not found`);
@@ -268,6 +301,8 @@ export async function updateResumeData(
   const texSource = customTexSource !== undefined 
     ? customTexSource 
     : (existing.texSource || generateLatexSource(updatedData));
+  const resolvedPdfPath = pdfPath !== undefined ? pdfPath : existing.pdfPath;
+  const resolvedOriginalPdfPath = originalPdfPath !== undefined ? originalPdfPath : existing.originalPdfPath;
   const now = new Date().toISOString();
   const nextVersion = (existing.revisions?.length || 0) + 1;
 
@@ -278,6 +313,8 @@ export async function updateResumeData(
     createdAt: now,
     data: updatedData,
     texSource,
+    pdfPath: resolvedPdfPath,
+    originalPdfPath: resolvedOriginalPdfPath,
   };
 
   const updatedResume = {
@@ -285,7 +322,8 @@ export async function updateResumeData(
     template: updatedData.template || existing.template,
     data: updatedData,
     texSource,
-    pdfPath: pdfPath || existing.pdfPath,
+    pdfPath: resolvedPdfPath,
+    originalPdfPath: resolvedOriginalPdfPath,
     updatedAt: now,
     revisions: [newRevision, ...(existing.revisions || [])],
   };

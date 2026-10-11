@@ -34,23 +34,55 @@ export async function compileLatexToPdf(
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-async function checkTectonic(): Promise<boolean> {
-  try {
-    await execPromise('tectonic --version', { timeout: 4000 });
-    return true;
-  } catch {
-    return false;
+// Cached path to tectonic executable
+let resolvedTectonicCmd: string | null = null;
+
+async function getTectonicCommand(): Promise<string | null> {
+  if (resolvedTectonicCmd) return resolvedTectonicCmd;
+
+  const envPath = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`;
+  const candidates = [
+    'tectonic',
+    '/opt/homebrew/bin/tectonic',
+    '/usr/local/bin/tectonic',
+    path.join(os.homedir(), '.cargo/bin/tectonic'),
+  ];
+
+  for (const cmd of candidates) {
+    try {
+      await execPromise(`"${cmd}" --version`, {
+        timeout: 4000,
+        env: { ...process.env, PATH: envPath },
+      });
+      resolvedTectonicCmd = cmd;
+      return cmd;
+    } catch {
+      // try next
+    }
   }
+
+  return null;
+}
+
+async function checkTectonic(): Promise<boolean> {
+  const cmd = await getTectonicCommand();
+  return cmd !== null;
 }
 
 async function compileTectonic(texSource: string, resumeId: string): Promise<CompileResult> {
+  const tectonicCmd = (await getTectonicCommand()) || 'tectonic';
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'promptcv-'));
   const texFilePath = path.join(tmpDir, 'resume.tex');
+  const envPath = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`;
+
   try {
     await fs.writeFile(texFilePath, texSource, 'utf8');
     const { stdout, stderr } = await execPromise(
-      `tectonic "${texFilePath}" --outdir "${tmpDir}"`,
-      { timeout: 30000 }
+      `"${tectonicCmd}" "${texFilePath}" --outdir "${tmpDir}"`,
+      {
+        timeout: 30000,
+        env: { ...process.env, PATH: envPath },
+      }
     );
     const pdfBuffer = await fs.readFile(path.join(tmpDir, 'resume.pdf'));
     const relPath = await savePdf(pdfBuffer, resumeId);
@@ -134,7 +166,7 @@ async function savePdf(pdfBuffer: Buffer, resumeId: string): Promise<string> {
   await fs.mkdir(dir, { recursive: true });
   const fileName = `${resumeId}-${Date.now()}.pdf`;
   await fs.writeFile(path.join(dir, fileName), pdfBuffer);
-  return `/compiled/${fileName}`;
+  return `/api/resumes/pdf/${fileName}`;
 }
 
 function friendlyError(msg: string): string {

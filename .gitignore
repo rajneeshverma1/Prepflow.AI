@@ -44,3 +44,8 @@ next-env.d.ts
 /public/compiled/*
 !/public/compiled/.gitkeep
 
+# uploaded files
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+

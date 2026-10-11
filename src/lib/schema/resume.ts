@@ -75,6 +75,9 @@ export const resumeDataSchema = z.object({
   certifications: z.array(certificationSchema).default([]),
   customSections: z.array(customSectionSchema).optional(),
   template: templateIdSchema.default('classic'),
+  isUploadedPdf: z.boolean().optional(),
+  originalFileName: z.string().optional(),
+  originalPdfPath: z.string().optional(),
 });
 
 export type ResumeDataSchema = z.infer<typeof resumeDataSchema>;

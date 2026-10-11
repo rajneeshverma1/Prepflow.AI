@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllResumes, createResume } from '@/lib/db/resumeStore';
+import { compileLatexToPdf } from '@/lib/latex/compiler';
 
 export async function GET() {
   try {
@@ -13,8 +14,6 @@ export async function GET() {
   }
 }
 
-
-
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -24,7 +23,15 @@ export async function POST(req: Request) {
       template: body.template || 'classic',
       initialData: body.initialData,
       texSource: body.texSource,
+      originalPdfPath: body.originalPdfPath,
     });
+
+    if (newResume.texSource) {
+      const compileRes = await compileLatexToPdf(newResume.texSource, newResume.id);
+      if (compileRes.success && compileRes.pdfRelativePath) {
+        newResume.pdfPath = compileRes.pdfRelativePath;
+      }
+    }
 
     return NextResponse.json({ success: true, resume: newResume }, { status: 201 });
   } catch (error: any) {

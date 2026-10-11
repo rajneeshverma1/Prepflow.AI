@@ -100,7 +100,7 @@ export function WorkspaceHeader({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1 bg-[#F7F7F9] border border-[#E2E4E9] rounded-full p-1 text-xs">
           <span className="text-[#8A8F9B] text-[11px] px-2 font-medium">Template:</span>
-          {(['classic', 'modern', 'technical', 'minimal'] as TemplateId[]).map((t) => (
+          {(['classic', 'modern', 'technical'] as TemplateId[]).map((t) => (
             <button
               key={t}
               onClick={() => onUpdateTemplate(t)}

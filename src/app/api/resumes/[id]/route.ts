@@ -40,7 +40,8 @@ export async function PUT(
       return NextResponse.json({ success: true, resume: duplicated });
     }
 
-    const existing = await (await import('@/lib/db/resumeStore')).getResumeById(id);
+    const validatedData = resumeDataSchema.parse(body.data);
+    const existing = await getResumeById(id);
     // Preserve record-level template; only switch if explicitly provided in body
     const effectiveTemplate = body.template || validatedData.template || existing?.template || 'classic';
     const dataWithTemplate = { ...validatedData, template: effectiveTemplate as any };
@@ -51,8 +52,14 @@ export async function PUT(
     const compileRes = await compileLatexToPdf(texSource, id);
     const pdfPath = compileRes.success ? compileRes.pdfRelativePath : undefined;
 
-    const updated = await updateResumeData(id, dataWithTemplate, body.prompt || 'Manual update', pdfPath, texSource);
-
+    const updated = await updateResumeData(
+      id,
+      dataWithTemplate,
+      body.prompt || 'Manual update',
+      pdfPath,
+      texSource,
+      existing?.originalPdfPath
+    );
 
     return NextResponse.json({
       success: true,

@@ -129,6 +129,21 @@ ${certItems}
 `
     : '';
 
+  // Custom Sections (e.g. Publications, Achievements, Leadership)
+  const customBlocks = (data.customSections || [])
+    .map((sec) => {
+      if (!sec.title || !sec.items || sec.items.length === 0) return '';
+      const items = sec.items.map((item) => `    \\item ${esc(item)}`).join('\n');
+      return `
+\\section*{${esc(sec.title)}}
+\\begin{itemize}[leftmargin=*, noitemsep, topsep=2pt]
+${items}
+\\end{itemize}
+\\vspace{4pt}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
   return `\\documentclass[10pt, letterpaper]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[margin=0.6in]{geometry}
@@ -163,6 +178,7 @@ ${educationBlock}
 ${projectsBlock}
 ${skillsBlock}
 ${certsBlock}
+${customBlocks}
 
 \\end{document}
 `;

@@ -20,12 +20,15 @@ export function EditorClient({ id }: { id: string }) {
   const [title, setTitle] = useState('Untitled Resume');
   const [template, setTemplate] = useState<TemplateId>('classic');
   const [pdfPath, setPdfPath] = useState<string | undefined>(undefined);
+  const [originalPdfPath, setOriginalPdfPath] = useState<string | undefined>(undefined);
+  const [activePdfUrl, setActivePdfUrl] = useState<string | undefined>(undefined);
   const [texSource, setTexSource] = useState<string>('');
   const [revisions, setRevisions] = useState<RevisionMeta[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [compilationError, setCompilationError] = useState<string | undefined>(undefined);
   const [isRevisionsOpen, setIsRevisionsOpen] = useState(false);
@@ -49,8 +52,10 @@ export function EditorClient({ id }: { id: string }) {
         const r = json.resume;
         setResumeData(r.data);
         setTitle(r.title);
-        setTemplate(r.template || 'classic');
+        const initPdf = r.originalPdfPath || r.data?.originalPdfPath || r.pdfPath;
         setPdfPath(r.pdfPath);
+        setOriginalPdfPath(r.originalPdfPath || r.data?.originalPdfPath || undefined);
+        setActivePdfUrl(initPdf);
         setTexSource(r.texSource || '');
         setRevisions(r.revisions || []);
         setMessages(r.messages || []);
@@ -65,6 +70,44 @@ export function EditorClient({ id }: { id: string }) {
   useEffect(() => {
     fetchResumeDetails();
   }, [id]);
+
+  // Handle uploading or replacing a PDF document directly in the editor or chat
+  const handleUploadPdf = async (file: File, instruction?: string) => {
+    setIsUploadingPdf(true);
+    setCompilationError(undefined);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('resumeId', id);
+      if (instruction?.trim()) {
+        formData.append('instruction', instruction.trim());
+      }
+
+      const res = await fetch('/api/resumes/parse-upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+      if (json.success) {
+        setOriginalPdfPath(json.originalPdfPath);
+        setPdfPath(json.pdfPath);
+        // Newly uploaded PDF (from chat) immediately replaces previous upload and opens
+        setActivePdfUrl(json.originalPdfPath || json.pdfPath);
+        if (json.texSource) setTexSource(json.texSource);
+        if (json.resume?.data) setResumeData(json.resume.data);
+        if (json.resume?.title) setTitle(json.resume.title);
+        if (json.resume?.revisions) setRevisions(json.resume.revisions);
+        if (json.resume?.messages) setMessages(json.resume.messages);
+        setMobileTab('preview');
+      } else {
+        setCompilationError(json.error || 'Failed to parse uploaded PDF');
+      }
+    } catch (err: any) {
+      setCompilationError(err.message || 'Error uploading file');
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
 
   // Handle manual structured form edit
   const handleDataChange = async (updatedData: ResumeData) => {
@@ -81,6 +124,7 @@ export function EditorClient({ id }: { id: string }) {
       const json = await res.json();
       if (json.success && json.resume) {
         setPdfPath(json.resume.pdfPath);
+        setActivePdfUrl(json.resume.pdfPath);
         setTexSource(json.resume.texSource || '');
         setRevisions(json.resume.revisions || []);
       }
@@ -118,6 +162,7 @@ export function EditorClient({ id }: { id: string }) {
         setResumeData(json.resume.data);
         setTemplate(json.resume.template || 'classic');
         setPdfPath(json.resume.pdfPath);
+        setActivePdfUrl(json.resume.pdfPath);
         setTexSource(json.resume.texSource || '');
         setRevisions(json.resume.revisions || []);
         setMessages(json.resume.messages || []);
@@ -195,6 +240,7 @@ export function EditorClient({ id }: { id: string }) {
       const json = await res.json();
       if (json.success) {
         setPdfPath(json.pdfPath);
+        setActivePdfUrl(json.pdfPath);
         if (json.texSource) setTexSource(json.texSource);
       } else {
         setCompilationError(json.error || 'Compilation failed');
@@ -220,6 +266,7 @@ export function EditorClient({ id }: { id: string }) {
       const json = await res.json();
       if (json.success) {
         setPdfPath(json.pdfPath);
+        setActivePdfUrl(json.pdfPath);
         if (json.texSource) setTexSource(json.texSource);
       } else {
         setCompilationError(json.error || 'Compilation failed');
@@ -245,6 +292,7 @@ export function EditorClient({ id }: { id: string }) {
         setResumeData(json.resume.data);
         setTemplate(json.resume.template || 'classic');
         setPdfPath(json.resume.pdfPath);
+        setActivePdfUrl(json.resume.pdfPath || json.resume.originalPdfPath);
         setTexSource(json.resume.texSource || '');
         setRevisions(json.resume.revisions || []);
       }
@@ -257,8 +305,9 @@ export function EditorClient({ id }: { id: string }) {
   };
 
   const handleDownloadPdf = () => {
-    if (pdfPath) {
-      window.open(pdfPath, '_blank');
+    const targetUrl = pdfPath || originalPdfPath;
+    if (targetUrl) {
+      window.open(targetUrl, '_blank');
     } else {
       handleManualCompile();
     }
@@ -371,7 +420,9 @@ export function EditorClient({ id }: { id: string }) {
             <CenterChat
               messages={messages}
               onSendMessage={handleSendMessage}
+              onUploadResume={handleUploadPdf}
               isProcessing={isAiProcessing}
+              isUploading={isUploadingPdf}
               compilationError={compilationError}
               onRetry={handleManualCompile}
             />
@@ -381,7 +432,7 @@ export function EditorClient({ id }: { id: string }) {
             <div className="w-0.5 h-6 bg-[#8A8F9B] group-hover:bg-white rounded-full transition-colors" />
           </Separator>
 
-          {/* Right Panel: Real Compiled PDF Preview & LaTeX Source */}
+          {/* Right Panel: Real PDF Preview (Uploaded & Compiled) & LaTeX Source */}
           <Panel
             id="right-preview"
             defaultSize={isSidebarOpen ? 40 : 55}
@@ -389,6 +440,8 @@ export function EditorClient({ id }: { id: string }) {
             className="h-full overflow-hidden"
           >
             <RightPreview
+              pdfUrl={activePdfUrl}
+              originalPdfPath={originalPdfPath}
               pdfPath={pdfPath}
               texSource={texSource}
               data={resumeData}
@@ -397,6 +450,8 @@ export function EditorClient({ id }: { id: string }) {
               onDownloadTex={handleDownloadTex}
               onTexSourceSave={handleTexSourceSave}
               onChangeTexSource={setTexSource}
+              onUploadPdf={handleUploadPdf}
+              isUploadingPdf={isUploadingPdf}
             />
           </Panel>
         </Group>
@@ -414,7 +469,9 @@ export function EditorClient({ id }: { id: string }) {
             <CenterChat
               messages={messages}
               onSendMessage={handleSendMessage}
+              onUploadResume={handleUploadPdf}
               isProcessing={isAiProcessing}
+              isUploading={isUploadingPdf}
               compilationError={compilationError}
               onRetry={handleManualCompile}
             />
@@ -423,6 +480,8 @@ export function EditorClient({ id }: { id: string }) {
         {mobileTab === 'preview' && (
           <div className="flex-1 overflow-hidden">
             <RightPreview
+              pdfUrl={activePdfUrl}
+              originalPdfPath={originalPdfPath}
               pdfPath={pdfPath}
               texSource={texSource}
               data={resumeData}
@@ -431,6 +490,8 @@ export function EditorClient({ id }: { id: string }) {
               onDownloadTex={handleDownloadTex}
               onTexSourceSave={handleTexSourceSave}
               onChangeTexSource={setTexSource}
+              onUploadPdf={handleUploadPdf}
+              isUploadingPdf={isUploadingPdf}
             />
           </div>
         )}

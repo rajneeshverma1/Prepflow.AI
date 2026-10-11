@@ -83,6 +83,22 @@ export function NewResumeModal({ isOpen, onClose }: NewResumeModalProps) {
   };
 
   const uploadAndParseResume = async (file: File) => {
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      setErrorMessage('File size exceeds the 25MB limit. Please upload a smaller file.');
+      return;
+    }
+    const isAllowed =
+      file.type === 'application/pdf' ||
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.type.startsWith('image/') ||
+      file.name.endsWith('.docx') ||
+      file.name.endsWith('.txt');
+    if (!isAllowed) {
+      setErrorMessage('Unsupported file format. Please upload a PDF resume.');
+      return;
+    }
+
     setIsUploading(true);
     setErrorMessage(undefined);
 
