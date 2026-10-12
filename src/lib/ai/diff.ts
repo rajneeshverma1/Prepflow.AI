@@ -1,4 +1,4 @@
-import { ResumeData, WorkExperience, Project, SkillCategory } from '../types/resume';
+import { ResumeData } from '../types/resume';
 
 export interface ResumeDiffItem {
   id: string;

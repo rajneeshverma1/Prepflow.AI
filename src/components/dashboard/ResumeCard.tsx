@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { MoreVertical, Copy, Trash2, Edit3, ArrowUpRight, Sparkles, Clock, Check, FileText } from 'lucide-react';
+import { MoreVertical, Copy, Trash2, Edit3, ArrowUpRight, Sparkles, Clock, Check } from 'lucide-react';
 import { ResumeData } from '@/lib/types/resume';
 
 interface ResumeCardProps {
@@ -24,7 +24,6 @@ export function ResumeCard({
   targetRole,
   template,
   updatedAt,
-  pdfPath,
   data,
   onDuplicate,
   onDelete,

@@ -249,7 +249,15 @@ function getExplanationForInstruction(instruction: string): string {
   return `Successfully updated resume content based on: "${instruction}".`;
 }
 
-function getSuggestedFollowups(instruction: string): string[] {
+function getSuggestedFollowups(instruction?: string): string[] {
+  if (instruction && instruction.toLowerCase().includes('condense')) {
+    return [
+      'Fit strictly on 1 page',
+      'Remove older experience bullet points',
+      'Highlight top 3 high-impact achievements',
+      'Switch template to Minimal',
+    ];
+  }
   return [
     'Shorten to 1 page',
     'Tailor for Senior Software Engineer',

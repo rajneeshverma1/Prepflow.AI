@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, Check, X, CheckCheck, XCircle, ChevronRight, FileText } from 'lucide-react';
+import { Sparkles, Check, X, CheckCheck, XCircle, ChevronRight } from 'lucide-react';
 import { ResumeDiffItem } from '@/lib/ai/diff';
 
 interface DiffReviewBarProps {

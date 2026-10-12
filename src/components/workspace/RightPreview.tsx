@@ -39,8 +39,6 @@ export function RightPreview({
   texSource,
   data,
   isCompiling,
-  onDownloadPdf,
-  onDownloadTex,
   onTexSourceSave,
   onChangeTexSource,
   onUploadPdf,
