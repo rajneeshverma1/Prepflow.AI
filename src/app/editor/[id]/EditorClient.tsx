@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader';
@@ -44,7 +44,7 @@ export function EditorClient({ id }: { id: string }) {
   const [proposedData, setProposedData] = useState<ResumeData | null>(null);
   const [isApplyingDiffs, setIsApplyingDiffs] = useState(false);
 
-  const fetchResumeDetails = async () => {
+  const fetchResumeDetails = useCallback(async () => {
     try {
       const res = await fetch(`/api/resumes/${id}`);
       const json = await res.json();
@@ -65,11 +65,11 @@ export function EditorClient({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchResumeDetails();
-  }, [id]);
+  }, [fetchResumeDetails]);
 
   // Handle uploading or replacing a PDF document directly in the editor or chat
   const handleUploadPdf = async (file: File, instruction?: string) => {
