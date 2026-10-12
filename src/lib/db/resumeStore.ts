@@ -193,6 +193,7 @@ export async function getResumeById(id: string) {
 }
 
 export async function createResume(params: {
+  id?: string;
   title: string;
   targetRole?: string;
   template?: string;
@@ -201,7 +202,7 @@ export async function createResume(params: {
   originalPdfPath?: string;
   pdfPath?: string;
 }) {
-  const id = `resume-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const id = params.id || `resume-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const isBlank = params.template === 'blank' || params.title?.toLowerCase().includes('blank');
   const data = params.initialData || (isBlank ? BLANK_RESUME_DATA : { ...SAMPLE_FULLSTACK_RESUME, template: (params.template as any) || 'classic' });
   const texSource = params.texSource || (isBlank ? BLANK_MINIMAL_LATEX_TEMPLATE : generateLatexSource(data));
