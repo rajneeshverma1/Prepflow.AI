@@ -3,6 +3,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://prepflow.ai'),
   title: 'Prepflow.ai — AI-Powered LaTeX Resume Editor',
   description: 'AI-native resume builder. Create, tailor, and compile professional LaTeX resumes with Gemini AI and job description matching.',
   icons: {
