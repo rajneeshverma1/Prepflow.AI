@@ -1,6 +1,6 @@
-# SyncCV (ResumeSync)
+# Prepflow.ai
 
-> **AI-powered resume tailoring with real-time visual feedback, ATS optimization, and production-grade LaTeX typesetting.**
+> **AI-native resume tailoring with real-time visual feedback, ATS optimization, and production-grade LaTeX typesetting.**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.4-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.3-blue?style=flat-square&logo=react)](https://react.dev/)
@@ -31,9 +31,9 @@
 
 ## Overview
 
-**SyncCV** is an AI-native resume engineering platform engineered to eliminate the friction of tailoring job applications. Rather than forcing candidates to manually rewrite bullet points or rely on generic AI generators that obliterate personal voice and formatting, SyncCV delivers granular, prompt-driven refinement backed by a **zero-hallucination structured schema**, **instant side-by-side previews**, and **sub-second LaTeX PDF compilation**.
+**Prepflow.ai** is an AI-native resume engineering platform engineered to eliminate the friction of tailoring job applications. Rather than forcing candidates to manually rewrite bullet points or rely on generic AI generators that obliterate personal voice and formatting, Prepflow.ai delivers granular, prompt-driven refinement backed by a **zero-hallucination structured schema**, **instant side-by-side previews**, and **sub-second LaTeX PDF compilation**.
 
-With SyncCV, candidates can import an existing resume (PDF, DOCX, TXT, or image), supply target role requirements, and guide an intelligent editor to optimize bullet points with quantifiable STAR-framework impact, align technical keywords for Applicant Tracking Systems (ATS), and switch between publication-grade typographical templates in real time.
+With Prepflow.ai, candidates can import an existing resume (PDF, DOCX, TXT, or image), supply target role requirements, and guide an intelligent editor to optimize bullet points with quantifiable STAR-framework impact, align technical keywords for Applicant Tracking Systems (ATS), and switch between publication-grade typographical templates in real time.
 
 ---
 
@@ -45,8 +45,8 @@ In modern recruitment, standard corporate openings attract hundreds of applicant
 - **Generic AI chat tools fail:** Pasting resumes into standard chatbots frequently invents unverified achievements, destroys formatting, and introduces awkward phrasing that dilutes the candidate's authentic background.
 - **Clunky WYSIWYG editors break layouts:** Web-based document editors frequently introduce margin errors, irregular line breaks, and formatting inconsistencies that fail ATS parsers and look unprofessional to hiring managers.
 
-### The SyncCV Solution
-SyncCV bridges the gap between conversational AI agility and typographical precision:
+### The Prepflow.ai Solution
+Prepflow.ai bridges the gap between conversational AI agility and typographical precision:
 1. **Factual Integrity First:** Resumes are parsed into an explicit, validated TypeScript/Zod schema. Edits modify structured data entities rather than unformatted markdown strings, preserving factual accuracy.
 2. **Surgical AI Prompting:** Users command the AI Copilot to refine specific sections (e.g., *"Make bullet points more technical"*, *"Condense to 1 page"*, *"Tailor for Senior Cloud Architect"*).
 3. **Automated LaTeX Typography:** Changes are dynamically rendered into pure LaTeX source and compiled using the embedded **Tectonic** engine, generating ATS-compliant, pixel-perfect PDFs ready for submission.
@@ -147,7 +147,7 @@ flowchart TD
 ## Project Directory Structure
 
 ```
-SyncCV/
+prepflow/
 ├── prisma/
 │   └── schema.prisma            # PostgreSQL schema (User, Resume, ResumeRevision, ChatMessage)
 ├── public/
@@ -239,8 +239,8 @@ With average corporate postings receiving 250+ applications, job seekers face a 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/SyncCV.git
-   cd SyncCV
+   git clone https://github.com/rajneeshverma1/Prepflow.AI.git
+   cd Prepflow.AI
    ```
 
 2. **Install project dependencies:**
@@ -252,7 +252,7 @@ With average corporate postings receiving 250+ applications, job seekers face a 
    Create a `.env` or `.env.local` file in the root directory:
    ```env
    # Database (Optional - falls back to high-speed in-memory store if unset)
-   DATABASE_URL="postgresql://user:password@localhost:5432/synccv?schema=public"
+   DATABASE_URL="postgresql://user:password@localhost:5432/prepflow?schema=public"
 
    # AI Engines (Optional - smart fallback engine activates if unset)
    GEMINI_API_KEY="your-gemini-api-key"
@@ -265,12 +265,17 @@ With average corporate postings receiving 250+ applications, job seekers face a 
    npx prisma db push
    ```
 
-5. **Start the development server:**
+5. **Run test verification (Optional):**
+   ```bash
+   npm run test:parse
+   ```
+
+6. **Start the development server:**
    ```bash
    npm run dev
    ```
 
-6. **Open in browser:**
+7. **Open in browser:**
    Navigate to [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
