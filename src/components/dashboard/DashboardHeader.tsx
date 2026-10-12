@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Plus, ChevronDown } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -12,7 +13,7 @@ export function DashboardHeader({ onCreateNew }: DashboardHeaderProps) {
     <header className="sticky top-0 z-50 border-b border-[#E2E4E9] bg-white/80 backdrop-blur-md px-6 py-3.5 transition-all">
       <nav className="max-w-[1200px] mx-auto flex items-center justify-between">
         {/* Brand Logo */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.href = '/'}>
+        <Link href="/" className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="font-bold text-xl tracking-tight text-[#17191C]">
               Prepflow.ai
@@ -21,7 +22,7 @@ export function DashboardHeader({ onCreateNew }: DashboardHeaderProps) {
               AI-Native ERP
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Links */}
         <div className="hidden md:flex items-center gap-7 text-[15px] font-normal text-[#17191C]">

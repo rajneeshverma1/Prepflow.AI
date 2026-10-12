@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NewResumeModal } from '@/components/dashboard/NewResumeModal';
 import { ResumeCard } from '@/components/dashboard/ResumeCard';
@@ -188,14 +189,14 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <header className="sticky top-0 z-50 border-b border-black/[0.07] pf-glass px-6 py-3.5">
         <nav className="max-w-[1200px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.href = '/'}>
+          <Link href="/" className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/favicon.jpg" alt="Prepflow.ai logo" className="w-8 h-8 rounded-full object-cover" />
             <span className="font-bold text-xl tracking-tight text-[#130e30]">Prepflow.ai</span>
             <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#ffe228] text-[#130e30]">
               AI-Native
             </span>
-          </div>
+          </Link>
           <div className="hidden md:flex items-center gap-7 text-[15px] text-[#130e30]">
             <a href="#how-it-works" className="hover:opacity-60 transition-opacity">How it works</a>
             <a href="#resumes" className="hover:opacity-60 transition-opacity">My Resumes</a>
