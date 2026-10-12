@@ -108,6 +108,28 @@ ${skillItems}
 `
     : '';
 
+  // Certifications
+  const certItems = (data.certifications || [])
+    .map((c) => {
+      let line = `\\textbf{${esc(c.name)}}`;
+      if (c.issuer && c.issuer !== 'Credential Issuer' && c.issuer !== 'Issuer') {
+        line += ` -- ${esc(c.issuer)}`;
+      }
+      if (c.date && c.date !== 'Year' && c.date !== 'Date') {
+        line += ` (${esc(c.date)})`;
+      }
+      return line;
+    })
+    .filter(Boolean)
+    .join(' \\\\\n');
+
+  const certsBlock = certItems
+    ? `
+\\section*{Certifications}
+${certItems}
+`
+    : '';
+
   const customBlocks = (data.customSections || [])
     .map((sec) => {
       if (!sec.title || !sec.items || sec.items.length === 0) return '';
@@ -139,7 +161,7 @@ ${items}
     urlcolor=accentColor,
 }
 
-\\titleformat{\\section}{\\large\\bfseries\\color{accentColor}\\uppercase}{}{0em}{}[{\\color{accentColor}\\hrule height 0.8pt}]
+\\titleformat{\\section}{\\large\\bfseries\\color{accentColor}}{}{0em}{}[\\titlerule]
 \\titlespacing*{\\section}{0pt}{10pt}{6pt}
 
 \\pagestyle{empty}
@@ -158,6 +180,7 @@ ${experienceBlock}
 ${educationBlock}
 ${projectsBlock}
 ${skillsBlock}
+${certsBlock}
 ${customBlocks}
 
 \\end{document}

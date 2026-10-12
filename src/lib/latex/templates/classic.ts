@@ -118,8 +118,18 @@ ${skillItems}
     : '';
 
   // Certifications
-  const certItems = data.certifications
-    .map((c) => `\\textbf{${esc(c.name)}} -- ${esc(c.issuer)} (${esc(c.date)})`)
+  const certItems = (data.certifications || [])
+    .map((c) => {
+      let line = `\\textbf{${esc(c.name)}}`;
+      if (c.issuer && c.issuer !== 'Credential Issuer' && c.issuer !== 'Issuer') {
+        line += ` -- ${esc(c.issuer)}`;
+      }
+      if (c.date && c.date !== 'Year' && c.date !== 'Date') {
+        line += ` (${esc(c.date)})`;
+      }
+      return line;
+    })
+    .filter(Boolean)
     .join(' \\\\\n');
 
   const certsBlock = certItems

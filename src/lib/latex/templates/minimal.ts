@@ -108,6 +108,28 @@ ${educationItems}
 `
     : '';
 
+  // Certifications
+  const certItems = (data.certifications || [])
+    .map((c) => {
+      let line = `\\textbf{${esc(c.name)}}`;
+      if (c.issuer && c.issuer !== 'Credential Issuer' && c.issuer !== 'Issuer') {
+        line += ` -- ${esc(c.issuer)}`;
+      }
+      if (c.date && c.date !== 'Year' && c.date !== 'Date') {
+        line += ` (${esc(c.date)})`;
+      }
+      return line;
+    })
+    .filter(Boolean)
+    .join(' \\\\\n');
+
+  const certsBlock = certItems
+    ? `
+\\section*{Certifications}
+{\\color{charcoal}${certItems}}
+`
+    : '';
+
   const customBlocks = (data.customSections || [])
     .map((sec) => {
       if (!sec.title || !sec.items || sec.items.length === 0) return '';
@@ -139,7 +161,7 @@ ${items}
     urlcolor=charcoal,
 }
 
-\\titleformat{\\section}{\\normalsize\\bfseries\\uppercase}{}{0em}{}[{\\color{subtleGrey}\\hrule height 0.4pt}]
+\\titleformat{\\section}{\\normalsize\\bfseries\\color{subtleGrey}}{}{0em}{}[\\titlerule]
 \\titlespacing*{\\section}{0pt}{10pt}{5pt}
 
 \\pagestyle{empty}
@@ -158,6 +180,7 @@ ${experienceBlock}
 ${projectsBlock}
 ${educationBlock}
 ${skillsBlock}
+${certsBlock}
 ${customBlocks}
 
 \\end{document}

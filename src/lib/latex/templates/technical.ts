@@ -110,6 +110,28 @@ ${educationItems}
 `
     : '';
 
+  // Certifications
+  const certItems = (data.certifications || [])
+    .map((c) => {
+      let line = `\\textbf{${esc(c.name)}}`;
+      if (c.issuer && c.issuer !== 'Credential Issuer' && c.issuer !== 'Issuer') {
+        line += ` -- ${esc(c.issuer)}`;
+      }
+      if (c.date && c.date !== 'Year' && c.date !== 'Date') {
+        line += ` (${esc(c.date)})`;
+      }
+      return line;
+    })
+    .filter(Boolean)
+    .join(' \\\\\n');
+
+  const certsBlock = certItems
+    ? `
+\\section*{CERTIFICATIONS}
+${certItems}
+`
+    : '';
+
   const customBlocks = (data.customSections || [])
     .map((sec) => {
       if (!sec.title || !sec.items || sec.items.length === 0) return '';
@@ -156,6 +178,7 @@ ${skillsBlock}
 ${experienceBlock}
 ${projectsBlock}
 ${educationBlock}
+${certsBlock}
 ${customBlocks}
 
 \\end{document}
