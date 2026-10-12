@@ -235,17 +235,29 @@ const SECTION_HEADERS: Record<string, string[]> = {
   summary: ['summary', 'professional summary', 'executive summary', 'profile', 'about me', 'objective', 'overview'],
   experience: ['experience', 'work experience', 'professional experience', 'employment history', 'work history', 'employment', 'internships'],
   education: ['education', 'academic background', 'academic history', 'academics', 'education & credentials', 'qualifications'],
-  projects: ['projects', 'key projects', 'personal projects', 'technical projects', 'selected projects', 'academic projects'],
+  projects: ['projects', 'key projects', 'selected projects', 'personal projects', 'technical projects', 'academic projects'],
   skills: ['skills', 'technical skills', 'skills & tools', 'core competencies', 'technologies', 'technical expertise', 'skills & technologies', 'tools & technologies'],
-  certifications: ['certifications', 'certificates', 'licenses & certifications', 'accreditations', 'credentials'],
-  publications: ['publications', 'research', 'papers', 'research & publications'],
-  awards: ['awards', 'honors', 'achievements', 'awards & honors', 'honors & awards'],
-  leadership: ['leadership', 'extracurricular', 'positions of responsibility', 'volunteer', 'volunteer experience', 'activities'],
+  certifications: ['certifications', 'certificates', 'licenses & certifications', 'accreditations', 'credentials', 'licenses'],
+  custom: ['co-curricular activities', 'co-curricular', 'extracurricular', 'extracurricular activities', 'activities', 'achievements', 'awards', 'honors', 'publications', 'research', 'leadership', 'volunteer', 'volunteer experience'],
 };
+
+const KNOWN_SKILL_CATEGORIES = [
+  'Languages & Core', 'Programming Languages', 'Languages',
+  'Frameworks & Libraries', 'Frameworks', 'Libraries',
+  'Databases & Storage', 'Databases',
+  'DevOps & Cloud', 'DevOps', 'Cloud & DevOps', 'Cloud',
+  'AI & Tools', 'AI & Machine Learning', 'AI Workflows', 'AI',
+  'Tools & Technologies', 'Tools', 'Technologies',
+  'Platforms', 'Infrastructure', 'Core Competencies',
+  'Web Technologies', 'Frontend', 'Backend'
+];
+KNOWN_SKILL_CATEGORIES.sort((a, b) => b.length - a.length);
+
+const DATE_RANGE_REGEX = /(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\.?\s*)?\b(20\d{2}|19\d{2})\b\s*[-–—to]+\s*(Present|Current|Ongoing|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\.?\s*(?:20\d{2}|19\d{2})\b|\b(?:20\d{2}|19\d{2})\b)/i;
 
 function isSectionHeading(line: string): { isHeading: boolean; sectionKey?: string; headingTitle?: string } {
   const clean = line.replace(/^[#*•\-_=~]+\s*/, '').replace(/[:\-_=~]+$/, '').trim().toLowerCase();
-  if (clean.length > 40 || clean.length < 3) return { isHeading: false };
+  if (clean.length > 50 || clean.length < 3) return { isHeading: false };
 
   for (const [key, keywords] of Object.entries(SECTION_HEADERS)) {
     if (keywords.includes(clean)) {
@@ -254,7 +266,7 @@ function isSectionHeading(line: string): { isHeading: boolean; sectionKey?: stri
   }
 
   // Check uppercase headings like "WORK EXPERIENCE" or "TECHNICAL SKILLS"
-  if (line === line.toUpperCase() && line.length >= 4 && line.length <= 35 && !line.includes('@') && !line.match(/\d{4}/)) {
+  if (line === line.toUpperCase() && line.length >= 4 && line.length <= 40 && !line.includes('@') && !line.match(/\d{4}/)) {
     for (const [key, keywords] of Object.entries(SECTION_HEADERS)) {
       if (keywords.some((kw) => clean.includes(kw))) {
         return { isHeading: true, sectionKey: key, headingTitle: line.trim() };
@@ -263,6 +275,23 @@ function isSectionHeading(line: string): { isHeading: boolean; sectionKey?: stri
   }
 
   return { isHeading: false };
+}
+
+function groupLinesIntoBullets(lines: string[]): string[] {
+  const bullets: string[] = [];
+  for (const line of lines) {
+    const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('▪') || /^\d+\./.test(line);
+    const clean = line.replace(/^[•\-*▪]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+    if (!clean) continue;
+
+    if (isBullet || bullets.length === 0) {
+      bullets.push(clean);
+    } else {
+      // Append continuation line to previous bullet
+      bullets[bullets.length - 1] += ` ${clean}`;
+    }
+  }
+  return bullets;
 }
 
 export function fallbackSmartTextParser(rawText: string, fileName?: string): ResumeData {
@@ -293,13 +322,21 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
   const linkedinMatch = cleanedText.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9_-]+)/i);
   const linkedin = linkedinMatch ? `https://linkedin.com/in/${linkedinMatch[1]}` : undefined;
 
-  const websiteMatch = cleanedText.match(/(?:https?:\/\/)?([a-zA-Z0-9_-]+\.(?:xyz|dev|io|me|ai|app|org|com|net))(?:\/[^\s]*)?/i);
+  // Website search limited to header (first 10 lines) to avoid matching internal company domains
   let website: string | undefined;
-  if (websiteMatch && !websiteMatch[0].includes('github.com') && !websiteMatch[0].includes('linkedin.com')) {
-    website = websiteMatch[0].startsWith('http') ? websiteMatch[0] : `https://${websiteMatch[0]}`;
+  const topText = rawLines.slice(0, 10).join(' ');
+  const webMatches = topText.matchAll(/(?:https?:\/\/)?([a-zA-Z0-9_-]+\.(?:xyz|dev|io|me|ai|app|org|com|net))(?:\/[^\s]*)?/gi);
+  for (const m of webMatches) {
+    const candidate = m[0];
+    const host = m[1].toLowerCase();
+    if (host.includes('github.com') || host.includes('linkedin.com')) continue;
+    if (email && host.includes(email.split('@')[1]?.toLowerCase())) continue;
+    if (['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com'].includes(host)) continue;
+    website = candidate.startsWith('http') ? candidate : `https://${candidate}`;
+    break;
   }
 
-  // 2. Candidate Name and Title Detection
+  // 2. Candidate Name, Location, and Title Detection from top lines
   let fullName = '';
   let jobTitle = '';
   let location = '';
@@ -307,29 +344,32 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
   const topLines = rawLines.slice(0, 10);
   for (let i = 0; i < topLines.length; i++) {
     const line = topLines[i];
-    const isContact = line.includes('@') || line.includes('http') || line.includes('github') || line.includes('linkedin') || (phone && line.includes(phone));
-    const headingCheck = isSectionHeading(line);
+    if (isSectionHeading(line).isHeading) break;
 
-    if (headingCheck.isHeading) break;
-
-    if (!fullName && !isContact && line.length >= 2 && line.length <= 45 && !line.includes('|') && !line.startsWith('•')) {
+    const isContactLine = line.includes('@') || (phone && line.includes(phone)) || line.includes('github.com');
+    if (!fullName && !isContactLine && line.length >= 2 && line.length <= 45 && !line.includes('|')) {
       if (/^[a-zA-Z\s.'-]+$/.test(line) && line.split(/\s+/).length <= 5) {
         fullName = line;
         continue;
       }
     }
 
-    if (fullName && !jobTitle && !isContact && line.length <= 55 && !line.includes('•') && !line.includes('@')) {
-      if (!line.includes(',') && !line.match(/\d/)) {
-        jobTitle = line;
-        continue;
+    if (isContactLine && !location) {
+      // Find location part separated by · or | or •
+      const parts = line.split(/[·|•]/).map((s) => s.trim());
+      for (const p of parts) {
+        if (!p.includes('@') && !(phone && p.includes(phone)) && !p.includes('github') && !p.includes('linkedin') && !p.includes('http')) {
+          if (p.length >= 3 && p.length <= 45 && (p.includes(',') || /^[A-Z][a-z]+/.test(p))) {
+            location = p;
+            break;
+          }
+        }
       }
     }
 
-    if (fullName && !location && (line.includes(',') || line.toLowerCase().includes('remote') || line.match(/^[A-Z][a-z]+,\s*[A-Z]{2}/))) {
-      const cleanedLoc = line.replace(/[|•·]/g, '').trim();
-      if (cleanedLoc.length < 50 && !cleanedLoc.includes('@')) {
-        location = cleanedLoc;
+    if (fullName && !jobTitle && !isContactLine && line.length <= 55 && !line.includes('•') && !line.includes('@')) {
+      if (!line.includes(',') && !line.match(/\d/)) {
+        jobTitle = line;
       }
     }
   }
@@ -346,10 +386,6 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
     if (!fullName) fullName = 'Resume Candidate';
   }
 
-  if (!jobTitle) {
-    jobTitle = 'Professional';
-  }
-
   // 3. Section Segmentation
   const sections: Record<string, string[]> = {
     summary: [],
@@ -358,12 +394,10 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
     projects: [],
     skills: [],
     certifications: [],
-    custom: [],
   };
 
   const customSectionsList: CustomSection[] = [];
   let currentSectionKey = 'header';
-  let currentCustomTitle = '';
 
   for (let i = 0; i < rawLines.length; i++) {
     const line = rawLines[i];
@@ -374,12 +408,10 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
       if (['summary', 'experience', 'education', 'projects', 'skills', 'certifications'].includes(key)) {
         currentSectionKey = key;
       } else {
-        // Custom section like awards, leadership, publications
         currentSectionKey = 'custom';
-        currentCustomTitle = heading.headingTitle || key.toUpperCase();
         customSectionsList.push({
           id: `custom-${customSectionsList.length + 1}`,
-          title: currentCustomTitle,
+          title: heading.headingTitle || 'ADDITIONAL ACTIVITIES',
           items: [],
         });
       }
@@ -395,31 +427,19 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
     }
   }
 
-  // 4. Parse Summary
+  // 4. Parse Summary & fallback job title
   const summary = sections.summary.join(' ').trim();
-
-  // Helper: clean and combine bullet points with continuation lines
-  function groupLinesIntoBullets(lines: string[]): string[] {
-    const bullets: string[] = [];
-    for (const line of lines) {
-      const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('▪') || /^\d+\./.test(line);
-      const clean = line.replace(/^[•\-*▪]\s*/, '').replace(/^\d+\.\s*/, '').trim();
-      if (!clean) continue;
-
-      if (isBullet || bullets.length === 0) {
-        bullets.push(clean);
-      } else {
-        // Append continuation line to previous bullet
-        bullets[bullets.length - 1] += ` ${clean}`;
-      }
-    }
-    return bullets;
+  if (!jobTitle && summary) {
+    const titleMatch = summary.match(/^(?:A\s+)?([A-Za-z\s&/-]{3,35})\s+(?:with|experienced|specializing|working|building|focused)/i);
+    if (titleMatch) jobTitle = titleMatch[1].trim();
   }
+  if (!jobTitle) jobTitle = 'Software Engineer';
 
   // 5. Parse Work Experience
   const experience: WorkExperience[] = [];
   const expLines = sections.experience;
   let curExp: {
+    id: string;
     company: string;
     position: string;
     location?: string;
@@ -429,17 +449,16 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
     rawHighlights: string[];
   } | null = null;
 
-  const dateRangeRegex = /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|June|July|August|September|October|November|December)?\s*\b\d{4}\b)\s*[-–—to]+\s*(\b(?:Present|Current|\d{4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|June|July|August|September|October|November|December)\s*\d{4})\b)/i;
-
   for (let i = 0; i < expLines.length; i++) {
     const line = expLines[i];
-    const dateMatch = line.match(dateRangeRegex);
     const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('▪');
+    const curDate = line.match(DATE_RANGE_REGEX);
+    const nextDate = !isBullet && expLines[i + 1] && !expLines[i + 1].startsWith('•') ? expLines[i + 1].match(DATE_RANGE_REGEX) : null;
 
-    if (dateMatch && !isBullet) {
+    if (!isBullet && (curDate || nextDate)) {
       if (curExp) {
         experience.push({
-          id: `exp-${experience.length + 1}`,
+          id: curExp.id,
           company: curExp.company,
           position: curExp.position,
           location: curExp.location,
@@ -450,24 +469,59 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
         });
       }
 
-      const dateStr = dateMatch[0];
-      const lineWithoutDate = line.replace(dateMatch[0], '').trim();
-      const parts = lineWithoutDate.split(/[|•·,–-]/).map((s) => s.trim()).filter(Boolean);
+      let company = '';
+      let position = '';
+      let loc = '';
+      let startDate = '';
+      let endDate = 'Present';
 
-      const nextLine = expLines[i + 1] && !expLines[i + 1].startsWith('•') && !expLines[i + 1].startsWith('-') ? expLines[i + 1] : '';
-      const comp = parts[0] || 'Organization';
-      const pos = parts[1] || (nextLine ? nextLine : 'Software Engineer');
+      if (nextDate) {
+        // Pattern A: Line i is Company [Location], Line i+1 is Position + Date
+        const compLine = line;
+        const posLine = expLines[i + 1];
+        i++; // consume next line
 
-      if (nextLine && !parts[1]) {
-        i++; // consumed nextLine
+        startDate = nextDate[1]?.trim() || '';
+        endDate = nextDate[2]?.trim() || 'Present';
+
+        const locRegex = /\((?:Remote|[^)]+)\)|\b(?:Remote|Chicago,\s*Illinois|San Francisco,\s*CA|Lucknow,\s*India|Mumbai,\s*India|United States|India)\b/gi;
+        const compLoc = compLine.match(locRegex);
+        const posLoc = posLine.match(locRegex);
+        loc = (posLoc ? posLoc.join(', ') : compLoc ? compLoc.join(', ') : '').replace(/^\(|\)$/g, '').trim();
+
+        company = compLine.replace(locRegex, '').replace(/[–\-|,\s]+$/, '').trim();
+        const cleanPos = posLine.replace(nextDate[0], '').replace(locRegex, '').replace(/^[–\-|,\s]+|[–\-|,\s]+$/g, '').trim();
+        position = cleanPos || jobTitle || 'Software Engineer';
+      } else if (curDate) {
+        // Pattern B: Line i has Date
+        startDate = curDate[1]?.trim() || '';
+        endDate = curDate[2]?.trim() || 'Present';
+        const lineNoDate = line.replace(curDate[0], '').trim();
+        const parts = lineNoDate.split(/[|•·,–-]/).map((s) => s.trim()).filter(Boolean);
+        const nextLine = expLines[i + 1] && !expLines[i + 1].startsWith('•') && !expLines[i + 1].startsWith('-') ? expLines[i + 1] : '';
+
+        if (parts.length >= 2) {
+          position = parts[0];
+          company = parts[1];
+        } else if (parts.length === 1 && nextLine) {
+          position = parts[0];
+          company = nextLine;
+          i++;
+        } else {
+          position = parts[0] || jobTitle;
+          company = nextLine || 'Company';
+          if (nextLine) i++;
+        }
       }
 
       curExp = {
-        company: comp,
-        position: pos,
-        startDate: dateMatch[1]?.trim() || '2023',
-        endDate: dateMatch[2]?.trim() || 'Present',
-        current: dateStr.toLowerCase().includes('present') || dateStr.toLowerCase().includes('current'),
+        id: `exp-${experience.length + 1}`,
+        company: company || 'Company',
+        position: position || 'Software Engineer',
+        location: loc || undefined,
+        startDate,
+        endDate,
+        current: /present|current|ongoing/i.test(endDate),
         rawHighlights: [],
       };
     } else if (curExp) {
@@ -477,7 +531,7 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
 
   if (curExp) {
     experience.push({
-      id: `exp-${experience.length + 1}`,
+      id: curExp.id,
       company: curExp.company,
       position: curExp.position,
       location: curExp.location,
@@ -493,37 +547,24 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
   const eduLines = sections.education;
   for (let i = 0; i < eduLines.length; i++) {
     const line = eduLines[i];
-    const isInstitution =
-      line.toLowerCase().includes('university') ||
-      line.toLowerCase().includes('college') ||
-      line.toLowerCase().includes('school') ||
-      line.toLowerCase().includes('institute') ||
-      line.toLowerCase().includes('academy') ||
-      line.toLowerCase().includes('polytechnic');
+    const prev = eduLines[i - 1] || '';
+    const next = eduLines[i + 1] || '';
+    const isInst = /university|college|school|institute|srmu|academy|polytechnic/i.test(line);
 
-    if (isInstitution) {
-      const nextLine = eduLines[i + 1] || '';
-      const thirdLine = eduLines[i + 2] || '';
-      const combined = `${line} ${nextLine} ${thirdLine}`;
-
-      const dateMatch = combined.match(dateRangeRegex) || combined.match(/\b(20\d{2})\b/);
+    if (isInst) {
+      const combined = `${prev} ${line} ${next}`;
+      const dateMatch = combined.match(DATE_RANGE_REGEX) || combined.match(/\b(20\d{2})\b/);
+      const degreeRegex = /(B\.?Tech[^\n,]*|Bachelor[^\n,]*|Master[^\n,]*|B\.?S\.?[^\n,]*|M\.?S\.?[^\n,]*|Ph\.?D\.?[^\n,]*|Associate[^\n,]*|Diploma[^\n,]*)/i;
+      const degMatch = prev.match(degreeRegex) || line.match(degreeRegex) || next.match(degreeRegex);
+      const degree = degMatch ? degMatch[0].replace(DATE_RANGE_REGEX, '').trim() : 'Degree';
       const gpaMatch = combined.match(/(?:GPA|CGPA|Percentage)[\s:]*([0-9.]+(?:\s*\/\s*[0-9.]+)?%?)/i);
-
-      let degree = 'Degree';
-      const degreeMatch = (nextLine + ' ' + line).match(/(Bachelor[^\n,]*|Master[^\n,]*|B\.?S\.?[^\n,]*|B\.?Tech[^\n,]*|M\.?S\.?[^\n,]*|Ph\.?D\.?[^\n,]*|Associate[^\n,]*|Diploma[^\n,]*)/i);
-      if (degreeMatch) {
-        degree = degreeMatch[0].trim();
-      } else if (nextLine && !nextLine.toLowerCase().includes('gpa')) {
-        degree = nextLine.trim();
-        i++;
-      }
 
       education.push({
         id: `edu-${education.length + 1}`,
-        institution: line.replace(/\b(Remote|\d{4})\b/gi, '').trim(),
+        institution: line.replace(/\b(Remote|\d{4})\b/gi, '').replace(/[–\-]\s*$/, '').trim(),
         degree,
         startDate: dateMatch ? (dateMatch[1] || dateMatch[0]) : '',
-        endDate: dateMatch ? (dateMatch[2] || dateMatch[1] || 'Completed') : '',
+        endDate: dateMatch ? (dateMatch[2] || dateMatch[1] || 'Present') : '',
         gpa: gpaMatch ? gpaMatch[1] : undefined,
       });
     }
@@ -532,52 +573,90 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
   // 7. Parse Projects
   const projects: Project[] = [];
   const projLines = sections.projects;
-  let curProj: Project | null = null;
+  let curProj: {
+    id: string;
+    name: string;
+    description: string;
+    techStack: string[];
+    rawHighlights: string[];
+  } | null = null;
 
-  for (const line of projLines) {
+  for (let i = 0; i < projLines.length; i++) {
+    const line = projLines[i];
     const isBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('▪');
-    if (!isBullet && (line.includes('|') || line.includes(':') || line.length < 50)) {
-      if (curProj) projects.push(curProj);
-      const parts = line.split(/[|:]/).map((s) => s.trim());
-      const pName = parts[0] || 'Project';
-      const pStack = parts[1] ? parts[1].split(/[,/]/).map((s) => s.trim()).filter(Boolean) : [];
+    const isTitle = !isBullet && (
+      line.includes('–') || line.includes(' - ') || line.includes('|') ||
+      /\b(Live|GitHub|Demo|App)\b/i.test(line) ||
+      (projLines[i + 1] && (projLines[i + 1].startsWith('•') || projLines[i + 1].startsWith('-')))
+    ) && !line.endsWith('.') && !/^[a-z]/.test(line);
+
+    if (isTitle) {
+      if (curProj) {
+        projects.push({
+          id: curProj.id,
+          name: curProj.name,
+          description: curProj.description,
+          techStack: curProj.techStack,
+          highlights: groupLinesIntoBullets(curProj.rawHighlights),
+        });
+      }
+      const cleanLine = line.replace(/\bLive\b/gi, '').trim();
+      const parts = cleanLine.split(/[–\-|]/).map((s) => s.trim()).filter(Boolean);
       curProj = {
         id: `proj-${projects.length + 1}`,
-        name: pName,
-        description: '',
-        highlights: [],
-        techStack: pStack,
+        name: parts[0] || cleanLine,
+        description: parts.slice(1).join(' – ') || '',
+        techStack: [],
+        rawHighlights: [],
       };
     } else if (curProj) {
-      const cleanBullet = line.replace(/^[•\-*▪]\s*/, '').trim();
-      if (cleanBullet) curProj.highlights.push(cleanBullet);
+      curProj.rawHighlights.push(line);
     }
   }
-  if (curProj) projects.push(curProj);
+
+  if (curProj) {
+    projects.push({
+      id: curProj.id,
+      name: curProj.name,
+      description: curProj.description,
+      techStack: curProj.techStack,
+      highlights: groupLinesIntoBullets(curProj.rawHighlights),
+    });
+  }
 
   // 8. Parse Skills
   const skills: SkillCategory[] = [];
-  const skillLines = sections.skills;
-  for (const line of skillLines) {
-    if (line.includes(':')) {
-      const [category, itemsStr] = line.split(':');
-      const cleanCat = category.replace(/^[•\-*▪]\s*/, '').trim();
-      const items = itemsStr.split(/[,/|•]/).map((s) => s.trim()).filter(Boolean);
-      if (items.length > 0) {
-        skills.push({
-          id: `sk-${skills.length + 1}`,
-          category: cleanCat,
-          items,
-        });
-      }
-    } else {
-      const items = line.split(/[,/|•]/).map((s) => s.trim()).filter(Boolean);
-      if (items.length > 1) {
-        skills.push({
-          id: `sk-${skills.length + 1}`,
-          category: skills.length === 0 ? 'Technical Skills' : 'Tools & Technologies',
-          items,
-        });
+  const fullSkillText = sections.skills.join(' ');
+  const catRegex = new RegExp('\\b(' + KNOWN_SKILL_CATEGORIES.map((c) => c.replace(/&/g, '\\&')).join('|') + ')\\s*:', 'gi');
+  const catMatches = [...fullSkillText.matchAll(catRegex)];
+
+  if (catMatches.length > 0) {
+    for (let i = 0; i < catMatches.length; i++) {
+      const match = catMatches[i];
+      const catName = match[1].trim();
+      const startIdx = match.index + match[0].length;
+      const endIdx = catMatches[i + 1] ? catMatches[i + 1].index : fullSkillText.length;
+      const itemsStr = fullSkillText.substring(startIdx, endIdx).trim();
+      const items = itemsStr.split(/[,·•|]/).map((s) => s.trim()).filter(Boolean);
+      skills.push({
+        id: `sk-${skills.length + 1}`,
+        category: catName,
+        items,
+      });
+    }
+  } else {
+    for (const line of sections.skills) {
+      if (line.includes(':')) {
+        const [category, itemsStr] = line.split(':');
+        const cleanCat = category.replace(/^[•\-*▪]\s*/, '').trim();
+        const items = itemsStr.split(/[,/|•]/).map((s) => s.trim()).filter(Boolean);
+        if (items.length > 0) {
+          skills.push({
+            id: `sk-${skills.length + 1}`,
+            category: cleanCat,
+            items,
+          });
+        }
       }
     }
   }
@@ -587,14 +666,21 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
     .map((line, idx) => {
       const clean = line.replace(/^[•\-*▪]\s*/, '').trim();
       if (!clean) return null;
+      const dateMatch = clean.match(/\b(20\d{2})\b/);
       return {
         id: `cert-${idx + 1}`,
-        name: clean,
-        issuer: 'Credential Issuer',
-        date: '',
+        name: clean.replace(/\(\d{4}\)/g, '').trim(),
+        issuer: '',
+        date: dateMatch ? dateMatch[1] : '',
       };
     })
     .filter(Boolean) as any[];
+
+  // 10. Custom Sections (e.g. Co-Curricular Activities, Leadership)
+  const customSections = customSectionsList.map((cs) => ({
+    ...cs,
+    items: groupLinesIntoBullets(cs.items),
+  }));
 
   return {
     personal: {
@@ -613,7 +699,7 @@ export function fallbackSmartTextParser(rawText: string, fileName?: string): Res
     projects,
     skills,
     certifications,
-    customSections: customSectionsList.length > 0 ? customSectionsList : undefined,
+    customSections: customSections.length > 0 ? customSections : undefined,
     template: 'classic',
   };
 }
