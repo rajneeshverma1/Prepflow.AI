@@ -193,6 +193,7 @@ export async function POST(req: Request) {
         );
       } else {
         resumeRecord = await createResume({
+          id: resumeId,
           title,
           targetRole: finalData.personal.jobTitle || 'Software Engineer',
           template: finalData.template || 'classic',
@@ -204,10 +205,11 @@ export async function POST(req: Request) {
       }
     } else {
       resumeRecord = await createResume({
+        id: resumeId,
         title,
-        targetRole: parsedData.personal.jobTitle || 'Software Engineer',
-        template: parsedData.template || 'classic',
-        initialData: parsedData,
+        targetRole: finalData.personal.jobTitle || 'Software Engineer',
+        template: finalData.template || 'classic',
+        initialData: finalData,
         texSource,
         originalPdfPath,
         pdfPath: compiledPdfPath,
