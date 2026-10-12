@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:parse": "npx tsx scripts/test-parse.ts",
     "postinstall": "prisma generate || exit 0"
   },
   "dependencies": {
